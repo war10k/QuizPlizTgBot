@@ -59,7 +59,7 @@
 1. Откройте любую вкладку браузера на компьютере.
 2. Соберите и вставьте в адресную строку следующую ссылку, подставив свой токен и скопированный URL воркера:
    ```text
-   https://telegram.org<ВАШ_BOT_TOKEN>/setWebhook?url=<URL_ВАШЕГО_ВОРКЕРА>.workers.dev&allowed_updates=["message","poll_answer"]
+   https://api.telegram.org/bot<ВАШ_BOT_TOKEN>/setWebhook?url=<URL_ВАШЕГО_ВОРКЕРА>.workers.dev&allowed_updates=["message","poll_answer"]
    ```
 3. Нажмите **Enter**. На экране должна появиться строчка: `{"ok":true,"result":true,"description":"Webhook was set"}`.
 
