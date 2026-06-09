@@ -16,3 +16,11 @@ invocation_logs = true
 enabled = false
 persist = true
 head_sampling_rate = 1
+
+# 1. Жестко фиксируем привязку базы данных KV
+[[kv_namespaces]]
+binding = "QUIZ_DB"
+id = "0fcb6aac8a3b4cdd894fd97e7428fe1f"
+
+[vars]
+TEAM_NAME = "Там пончики к чаю" # Название вашей команды

@@ -1,9 +1,11 @@
 name: Deploy Worker
+
 on:
   push:
     branches:
       - main
       - master
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,3 +17,11 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Дописываем CHAT_ID в список секретов для Wrangler
+          secrets: |
+            BOT_TOKEN
+            CHAT_ID
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          # +++ ПРОПИСЫВАЕМ СВЯЗКУ С ГИТХАБОМ ДЛЯ CHAT_ID +++
+          CHAT_ID: ${{ secrets.CHAT_ID }}
