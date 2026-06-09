@@ -1,6 +1,7 @@
 name = "donat-to-tea-bot"        # Точное имя вашего воркера из панели Cloudflare
 main = "worker.js"              # Имя файла с кодом бота
 compatibility_date = "2026-06-09" # Текущая дата для фиксации версии API Cloudflare [ June 9, 2026]
+
 [observability]
 enabled = false
 head_sampling_rate = 1
