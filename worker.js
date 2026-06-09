@@ -564,50 +564,82 @@ async function checkLiveResults(targetChatId, env) {
                     text += `<i>Красавчики! Гордимся каждым пончиком! Сладкая игра! 🍩💪</i>`;
                     await sendTelegramMessage(targetChatId, text, env);
 
-                    // 2. Сборка чистого HTML/CSS кода таблицы раундов по всем командам
+                    // // 2. Сборка чистого HTML/CSS кода таблицы раундов по всем командам
                     let rowsHtml = "";
                     resultsTable.forEach((row) => {
                         const isOurTeam = row.team?.title?.toLowerCase().replace(/[«»"']/g, "").includes(env.TEAM_NAME.toLowerCase().replace(/[«»"']/g, ""));
                         const rowClass = isOurTeam ? 'class="our-team"' : '';
                         const r = row.rounds || {};
                         rowsHtml += `
-                        <tr ${rowClass}>
-                            <td style="text-align: center; font-weight: bold; color: #475569;">${row.place}</td>
-                            <td style="padding-left: 15px; font-weight: 500; color: #0f172a;">${row.team?.title || "Без названия"}</td>
-                            <td style="text-align: center; font-weight: bold; color: #0f172a; font-size: 15px;">${row.total || 0}</td>
-                            <td style="text-align: center; color: #64748b;">${r["1"] || 0}</td>
-                            <td style="text-align: center; color: #64748b;">${r["2"] || 0}</td>
-                            <td style="text-align: center; color: #64748b;">${r["3"] || 0}</td>
-                            <td style="text-align: center; color: #64748b;">${r["4"] || 0}</td>
-                            <td style="text-align: center; color: #64748b;">${r["5"] || 0}</td>
-                            <td style="text-align: center; color: #64748b;">${r["6"] || 0}</td>
-                            <td style="text-align: center; color: #64748b;">${r["7"] || 0}</td>
-                        </tr>`;
+                            <tr data-v-001abdab="" ${rowClass}>
+                                <th data-v-001abdab="">${row.place}</th>
+                                <th data-v-001abdab="">${row.team?.title || "Без названия"}</th>
+                                <th data-v-001abdab="">${row.total || 0}</th>
+                                <th data-v-001abdab="">${r["1"] || 0}</th>
+                                <th data-v-001abdab="">${r["2"] || 0}</th>
+                                <th data-v-001abdab="">${r["3"] || 0}</th>
+                                <th data-v-001abdab="">${r["4"] || 0}</th>
+                                <th data-v-001abdab="">${r["5"] || 0}</th>
+                                <th data-v-001abdab="">${r["6"] || 0}</th>
+                                <th data-v-001abdab="">${r["7"] || 0}</th>
+                            </tr>`;
                     });
 
                     const fullHtml = `
-                    <div style="width: 800px; padding: 25px; background: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                        <h2 style="margin: 0 0 15px 0; color: #1e293b; font-size: 22px; font-weight: bold; border-bottom: 3px solid #cbd5e1; padding-bottom: 12px;">${gameTitle}</h2>
-                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                            <thead>
-                                <tr style="background: #f1f5f9; border-bottom: 2px solid #94a3b8; height: 45px; color: #1e293b; font-weight: bold;">
-                                    <th style="width: 60px; text-align: center;">Место</th>
-                                    <th style="width: 260px; text-align: left; padding-left: 15px;">Название команды</th>
-                                    <th style="width: 75px; text-align: center;">Итого</th>
-                                    <th style="text-align: center; width: 55px;">1Р</th><th style="text-align: center; width: 55px;">2Р</th>
-                                    <th style="text-align: center; width: 55px;">3Р</th><th style="text-align: center; width: 55px;">4Р</th>
-                                    <th style="text-align: center; width: 55px;">5Р</th><th style="text-align: center; width: 55px;">6Р</th>
-                                    <th style="text-align: center; width: 55px;">7Р</th>
+                    <style>
+                        #vueLatestTable table tr td[data-v-001abdab] {
+                            padding: .3rem .625rem;
+                            text-align: center
+                        }
+                        #vueLatestTable[data-v-f164737e] {
+                            background-color: #fff;
+                            color: #333 !important;
+                            cursor: pointer;
+                            font-weight: 500;
+                            margin: 0 auto;
+                            -webkit-user-select: none;
+                            -moz-user-select: none;
+                            user-select: none;
+                            border-radius: 2px;
+                            box-shadow: 0 2px 8px #63636333;
+                        }
+                        * {
+                            box-sizing: border-box;
+                            font-family: Gilroy;
+                            font-size: 16px;
+                        }
+                        tr {
+                            display: table-row;
+                            vertical-align: inherit;
+                            unicode-bidi: isolate;
+                            border-color: inherit;
+                        }
+                        td {
+                            display: table-cell;
+                            vertical-align: inherit;
+                            unicode-bidi: isolate;
+                        }
+                        .our-team { background: #fef08a !important; font-weight: bold; }
+                    </style>
+                    <div data-v-001abdab="" data-v-f164737e="" id="vueLatestTable" class="defaultTheme">
+                        <h2 style="margin: 0 0 15px 0; font-size: 22px; font-weight: bold; padding-bottom: 12px; padding: .3rem .625rem;">${gameTitle}</h2>
+                        <table data-v-001abdab="" aria-hidden="true">
+                            <thead data-v-001abdab="">
+                                <tr data-v-001abdab="">
+                                    <th data-v-001abdab="">Место</th>
+                                    <th data-v-001abdab="">Название команды</th>
+                                    <th data-v-001abdab="">Итого</th>
+                                    <th data-v-001abdab="">1 раунд</th>
+                                    <th data-v-001abdab="">2 раунд</th>
+                                    <th data-v-001abdab="">3 раунд</th>
+                                    <th data-v-001abdab="">4 раунд</th>
+                                    <th data-v-001abdab="">5 раунд</th>
+                                    <th data-v-001abdab="">6 раунд</th>
+                                    <th data-v-001abdab="">7 раунд</th>
                                 </tr>
                             </thead>
-                            <tbody>${rowsHtml}</tbody>
+                            <tbody data-v-001abdab="">${rowsHtml}</tbody>                   
                         </table>
-                        <style>
-                            tr { height: 42px; border-bottom: 1px solid #e2e8f0; }
-                            tr:nth-child(even) { background: #f8fafc; }
-                            .our-team { background: #fef08a !important; font-weight: bold; }
-                            .our-team td { color: #0f172a !important; }
-                        </style>
                     </div>`;
 
                     // 3. Отправляем HTML на отрисовку в Pictify.io API
