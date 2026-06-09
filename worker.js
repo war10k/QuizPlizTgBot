@@ -513,10 +513,54 @@ async function checkLiveResults(targetChatId, env) {
         // Получаем из базы список всех ключей активных игр
         const list = await env.QUIZ_DB.list({ prefix: "active_game:" });
         if (!list.keys || list.keys.length === 0) return; // Если активных игр нет, засыпаем
-
+        
+         // Получаем текущее точное время в Новокузнецке (Красноярск +7)
+        const now = new Date();
+        const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
+        
         for (const keyObj of list.keys) {
             const gameId = keyObj.name.replace("active_game:", "");
             
+            // Читаем сохраненные данные опроса, чтобы узнать дату и время проведения игры
+            const pollData = await env.QUIZ_DB.get(keyObj.name);
+            if (!pollData) continue;
+
+            const parsedPoll = JSON.parse(pollData);
+            // Извлекаем полные данные игры из базы опросов
+            const fullGameObj = await env.QUIZ_DB.get(`poll:${parsedPoll.pollId}`);
+            if (!fullGameObj) continue;
+
+            const game = JSON.parse(fullGameObj);
+            
+            // Если дата или время не записались (старый опрос), проверяем по старинке
+            if (!game.date || !game.time) {
+                console.log(`[Check] Нет данных времени для игры ${gameId}, опрашиваю напрямую...`);
+            } else {
+                // Собираем полноценный объект даты и времени начала игры
+                // game.date: "09.06.2026", game.time: "19:30"
+                const dateParts = game.date.split(".");
+                const timeParts = game.time.split(":");
+                
+                if (dateParts.length === 3 && timeParts.length === 2) {
+                    const gameStartDateTime = new Date(
+                        parseInt(dateParts[2], 10),     // Год
+                        parseInt(dateParts[1], 10) - 1, // Месяц (в JS от 0)
+                        parseInt(dateParts[0], 10),     // День
+                        parseInt(timeParts[0], 10),     // Час
+                        parseInt(timeParts[1], 10)      // Минуты
+                    );
+
+                    // Добавляем к времени начала игры 2 часа (время на проведение Квиза)
+                    const resultsAvailableTime = new Date(gameStartDateTime.getTime() + (2 * 60 * 60 * 1000));
+
+                    // Если текущее время в Новокузнецке МЕНЬШЕ, чем время окончания игры — пропускаем шаг
+                    if (localTime < resultsAvailableTime) {
+                        console.log(`[Skip] Результаты игры ${game.title} еще рано проверять. Игра начнется в ${game.time}, проверка доступна после ${resultsAvailableTime.toLocaleTimeString("ru-RU", {hour: '2-digit', minute:'2-digit'})}`);
+                        continue; 
+                    }
+                }
+            }
+
             // Запрашиваем официальное API результатов Квизплиз по ID игры
             const resultsUrl = `https://api.quizplease.ru/api/games/${gameId}/results`;
             const response = await fetch(resultsUrl, { headers });
