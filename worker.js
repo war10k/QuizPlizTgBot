@@ -57,7 +57,6 @@ export default {
     }
 };
 
-
 async function runDailyCronTasks(env, event) {
     
     const now = new Date();
