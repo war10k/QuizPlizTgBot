@@ -35,14 +35,20 @@
     *   **KV namespace**: выберите из списка созданную на Шаге 2 базу `QUIZ_DB`.
     *   Нажмите **Save**.
 
-### Шаг 4. Безопасное скрытие секретных переменных
-Чтобы не публиковать приватные токены в открытый доступ на GitHub, добавим их в переменные окружения Cloudflare:
-1. В настройках воркера (**Settings** ➔ **Variables**) найдите раздел **Environment Variables** и нажмите **Add variable**.
-2. Добавьте три ключа:
-    *   `BOT_TOKEN` — вставьте ваш токен от BotFather и обязательно нажмите кнопку **Encrypt** рядом.
-    *   `CHAT_ID` — вставьте ID вашей группы (число с минусом, БЕЗ кавычек).
-    *   `TEAM_NAME` — вставьте текстовое название вашей команды (например, `Там пончики к чаю`).
-3. Нажмите **Save and Deploy**. Теперь код воркера обращается к ним безопасно через объект `env`.
+#### Шаг 4. Безопасное скрытие секретных переменных в GitHub
+Поскольку проект интегрирован с автоматическим деплоем, вносить токены на сайте Cloudflare вручную нельзя — Wrangler сотрет их при следующем коммите. Спрячем их в секреты репозитория GitHub:
+1. Зайдите в ваш созданный репозиторий на **GitHub** ➔ **Settings** ➔ **Secrets and variables** ➔ **Actions**.
+2. Нажмите кнопку **New repository secret** и добавьте первый секрет:
+    * **Name:** `CLOUDFLARE_API_TOKEN`
+    * **Value:** *Ваш API-токен Cloudflare (создается в My Profile ➔ API Tokens ➔ шаблон Edit Cloudflare Workers).*
+3. Нажмите **New repository secret** еще раз и добавьте второй секрет:
+    * **Name:** `BOT_TOKEN`
+    * **Value:** *Ваш токен от BotFather.*
+4. Нажмите **New repository secret** в третий раз и добавьте:
+    * **Name:** `CHAT_ID`
+    * **Value:** *ID вашей группы с минусом (например, -1001234567890), БЕЗ кавычек.*
+
+---
 
 ### Шаг 5. Настройка Cron-расписания (Будильник бота)
 Чтобы бот автоматически присылал напоминания и проверял результаты каждый час, настроим триггер:
@@ -68,36 +74,48 @@
 ## 🐙 Интеграция с GitHub и Continuous Deployment (CD)
 
 Чтобы код автоматически обновлялся в Cloudflare каждый раз, когда вы делаете `git push` в свой репозиторий, настройте официальный GitHub Action от Cloudflare (Wrangler):
+В корне вашей папки на ПК должны быть созданы два конфигурационных файла, которые автоматически подхватят секреты при отправке кода:
 
-1. В корне вашего проекта на ПК создайте файл конфигурации **`wrangler.toml`**:
-   ```toml
-   name = "quiz-please-bot"
-   main = "worker.js"
-   compatibility_date = "2026-06-09"
+1. Создайте файл **`wrangler.toml`** (переменная TEAM_NAME пишется открыто, остальные подтянутся из секретов GitHub):
+```toml
+name = "donat-to-tea-bot"
+main = "worker.js"
+compatibility_date = "2026-06-09"
 
-   [[kv_namespaces]]
-   binding = "QUIZ_DB"
-   id = "ID_ВАШЕЙ_БАЗЫ_ДАННЫХ_ИЗ_ПАНЕЛИ_KV"
-   ```
-2. В личном кабинете Cloudflare перейдите в **My Profile** ➔ **API Tokens** ➔ **Create Token** ➔ выберите шаблон **Edit Cloudflare Workers** и скопируйте полученный токен.
-3. Зайдите в ваш репозиторий на **GitHub** ➔ **Settings** ➔ **Secrets and variables** ➔ **Actions** ➔ **New repository secret**.
-4. Добавьте секрет с именем `CLOUDFLARE_API_TOKEN` и вставьте туда скопированный токен.
-5. Создайте в проекте папку `.github/workflows/` и положите туда файл `deploy.yml`:
-   ```yaml
-   name: Deploy Worker
-   on:
-     push:
-       branches:
-         - main
-   jobs:
-     deploy:
-       runs-on: ubuntu-latest
-       steps:
-         - uses: actions/checkout@v3
-         - name: Deploy to Cloudflare Workers
-           uses: cloudflare/wrangler-action@v3
-           with:
-             apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
-   ```
+[[kv_namespaces]]
+binding = "QUIZ_DB"
+id = "СЮДА_ВСТАВЬТЕ_ID_ВАШЕЙ_БАЗЫ_ДАННЫХ_ИЗ_ПАНЕЛИ_KV"
+
+[vars]
+TEAM_NAME = "СЮДА_ВСТАВЬТЕ_ИМЯ_ВАШЕй_КОМАНДЫ"
+```
+2. Создайте файл сценария **`.github/workflows/deploy.yml`** (он безопасно перенаправит зашифрованные токены из GitHub прямо в среду Cloudflare Workers):
+```yaml
+name: Deploy Worker
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          secrets: |
+            BOT_TOKEN
+            CHAT_ID
+        env:
+          BOT_TOKEN: \${{ secrets.BOT_TOKEN }}
+          CHAT_ID: \${{ secrets.CHAT_ID }}
+```
 
 Теперь ваш проект полностью автоматизирован, скрыт от чужих глаз и развернут в облаке! Сладких побед вашей команде! 🍩🏆
