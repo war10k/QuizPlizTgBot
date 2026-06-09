@@ -1,14 +1,14 @@
 const URLS = {
-    "рџЏ† РЎРµР·РѕРЅРЅС‹Р№ СЂРµР№С‚РёРЅРі (РљР»Р°СЃСЃРёРєР°)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=1&bySeason=true&page=1&perPage=20&order=points&orderBy=desc",
-    "рџЊЌ РћР±С‰РёР№ СЂРµР№С‚РёРЅРі (РљР»Р°СЃСЃРёРєР°)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=1&bySeason=false&page=1&perPage=20&order=points&orderBy=desc",
-    "рџЏ† РЎРµР·РѕРЅРЅС‹Р№ СЂРµР№С‚РёРЅРі (РљРёРЅРѕ Рё РјСѓР·С‹РєР°)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=2&bySeason=true&page=1&perPage=20&order=points&orderBy=desc",
-    "рџЊЌ РћР±С‰РёР№ СЂРµР№С‚РёРЅРі (РљРёРЅРѕ Рё РјСѓР·С‹РєР°)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=2&bySeason=false&page=1&perPage=20&order=points&orderBy=desc",
+    "?? Сезонный рейтинг (Классика)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=1&bySeason=true&page=1&perPage=20&order=points&orderBy=desc",
+    "?? Общий рейтинг (Классика)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=1&bySeason=false&page=1&perPage=20&order=points&orderBy=desc",
+    "?? Сезонный рейтинг (Кино и музыка)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=2&bySeason=true&page=1&perPage=20&order=points&orderBy=desc",
+    "?? Общий рейтинг (Кино и музыка)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=2&bySeason=false&page=1&perPage=20&order=points&orderBy=desc",
 };
 
-// API СЂР°СЃРїРёСЃР°РЅРёСЏ РёРіСЂ РІ РќРѕРІРѕРєСѓР·РЅРµС†РєРµ (ID: 93)
+// API расписания игр в Новокузнецке (ID: 93)
 const SCHEDULE_API = "https://api.quizplease.ru/api/games/schedule/93?order=date&meta[]=places_ids&meta[]=dates&statuses[]=0&statuses[]=1&statuses[]=2&statuses[]=3&statuses[]=5";
 
-const DAYS_OF_WEEK = ["РІРѕСЃРєСЂРµСЃРµРЅСЊРµ", "РїРѕРЅРµРґРµР»СЊРЅРёРє", "РІС‚РѕСЂРЅРёРє", "СЃСЂРµРґР°", "С‡РµС‚РІРµСЂРі", "РїСЏС‚РЅРёС†Р°", "СЃСѓР±Р±РѕС‚Р°"];
+const DAYS_OF_WEEK = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 
 export default {
     
@@ -18,22 +18,22 @@ export default {
 
     async fetch(request, env, ctx) {
 
-        // Cloudflare РїСЂРёРЅРёРјР°РµС‚ С‚РѕР»СЊРєРѕ POST Р·Р°РїСЂРѕСЃС‹ РѕС‚ Telegram
+        // Cloudflare принимает только POST запросы от Telegram
         if (request.method === "POST") {
             try {
                 const payload = await request.json();
                 
-                // 1. Р›РѕРІРёРј РєР»РёРєРё РІ РѕРїСЂРѕСЃР°С…
+                // 1. Ловим клики в опросах
                 if (payload.poll_answer) {
                     ctx.waitUntil(handlePollAnswer(payload.poll_answer, env));
                 }
 
-                // РџСЂРѕРІРµСЂСЏРµРј, РµСЃС‚СЊ Р»Рё С‚РµРєСЃС‚РѕРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ
+                // Проверяем, есть ли текстовое сообщение
                 if (payload.message && payload.message.text) {
                     const chatId = payload.message.chat.id;
                     const text = payload.message.text;
                     
-                     console.log(`РџРѕР»СѓС‡РµРЅ С‚РµРєСЃС‚: "${text}" РѕС‚ С‡Р°С‚Р°: ${chatId}`);
+                     console.log(`Получен текст: "${text}" от чата: ${chatId}`);
 
                     if (text.startsWith("/stats")) ctx.waitUntil(sendStats(chatId, env));
                     if (text.startsWith("/nextgame")) ctx.waitUntil(sendNextGamesList(chatId, env));
@@ -48,11 +48,11 @@ export default {
                     }
                 }
             } catch (e) {
-                console.error("РћС€РёР±РєР° РѕР±СЂР°Р±РѕС‚РєРё:", e);
+                console.error("Ошибка обработки:", e);
             }
         }
         
-        // Р’СЃРµРіРґР° РІРѕР·РІСЂР°С‰Р°РµРј Telegram СЃС‚Р°С‚СѓСЃ 200 OK
+        // Всегда возвращаем Telegram статус 200 OK
         return new Response("OK", { status: 200 });
     }
 };
@@ -64,23 +64,23 @@ async function runDailyCronTasks(env, event) {
     const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
     const currentHour = localTime.getHours();
 
-    // 1. РќР°РїРѕРјРёРЅР°РЅРёСЏ РѕР± РёРіСЂР°С… РѕС‚РїСЂР°РІР»СЏРµРј СЃС‚СЂРѕРіРѕ РѕРґРёРЅ СЂР°Р· РІ РґРµРЅСЊ РІ 10:00 СѓС‚СЂР°
+    // 1. Напоминания об играх отправляем строго один раз в день в 10:00 утра
     if (currentHour === 10) {
         await checkAndSendReminders(env.CHAT_ID, env);
     }
     
-    // 2. РџСЂРѕРІРµСЂСЏРµРј РёР·РјРµРЅРµРЅРёСЏ РІ РѕР±С‰РµРј СЂРµР№С‚РёРЅРіРµ (Р—Р°Р» СЃР»Р°РІС‹) С‚РѕР¶Рµ РІ 10:00
+    // 2. Проверяем изменения в общем рейтинге (Зал славы) тоже в 10:00
     if (currentHour === 10) {
         await trackRatingChanges(env.CHAT_ID, env);
     }
 
-    // +++ 3. Рђ РІРѕС‚ РїСЂРѕРІРµСЂРєСѓ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РёРіСЂ Р·Р°РїСѓСЃРєР°РµРј РљРђР–Р”Р«Р™ СЂР°Р· РїСЂРё СЃСЂР°Р±Р°С‚С‹РІР°РЅРёРё РєСЂРѕРЅР° +++
+    // +++ 3. А вот проверку результатов игр запускаем КАЖДЫЙ раз при срабатывании крона +++
     await checkLiveResults(env.CHAT_ID, env);
 }
 
-// Р¤СѓРЅРєС†РёСЏ СЃР±РѕСЂР° РґР°РЅРЅС‹С… РёР· 4 API РљРІРёР·РїР»РёР· Рё РѕС‚РїСЂР°РІРєРё РІ Telegram
+// Функция сбора данных из 4 API Квизплиз и отправки в Telegram
 async function sendStats(targetChatId, env) {
-    let messageText = `рџЌ© <b>РЎС‚Р°С‚РёСЃС‚РёРєР° РєРѕРјР°РЅРґС‹ В«${env.TEAM_NAME}В»</b>\n\n`;
+    let messageText = `?? <b>Статистика команды «${env.TEAM_NAME}»</b>\n\n`;
     
     const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -90,7 +90,7 @@ async function sendStats(targetChatId, env) {
         try {
             const fullUrl = `${baseUrl}&title=${encodeURIComponent(env.TEAM_NAME)}`;
             
-            // РСЃРїРѕР»СЊР·СѓРµРј СЃС‚Р°РЅРґР°СЂС‚РЅС‹Р№ fetch, РІСЃС‚СЂРѕРµРЅРЅС‹Р№ РІ Cloudflare
+            // Используем стандартный fetch, встроенный в Cloudflare
             const response = await fetch(fullUrl, { headers });
             
             if (response.status === 200) {
@@ -102,23 +102,23 @@ async function sendStats(targetChatId, env) {
                     const games = team.games !== undefined ? team.games : 0;
                     
                     messageText += `<b>${label}</b>\n`;
-                    messageText += `в”њ вњЁ РћС‡РєРё: <code>${points}</code>\n`;
-                    messageText += `в”” рџЋ® РРіСЂС‹: <code>${games}</code>\n\n`;
+                    messageText += `? ? Очки: <code>${points}</code>\n`;
+                    messageText += `? ?? Игры: <code>${games}</code>\n\n`;
                 } else {
-                    messageText += `<b>${label}</b>\nв”” вљ пёЏ РќРµС‚ СЃС‹РіСЂР°РЅРЅС‹С… РёРіСЂ РІ СЌС‚РѕРј СЃРµР·РѕРЅРµ\n\n`;
+                    messageText += `<b>${label}</b>\n? ?? Нет сыгранных игр в этом сезоне\n\n`;
                 }
             } else {
-                messageText += `<b>${label}</b>\nв”” вќЊ РћС€РёР±РєР° СЃРµСЂРІРµСЂР° РљРІРёР·РїР»РёР· (${response.status})\n\n`;
+                messageText += `<b>${label}</b>\n? ? Ошибка сервера Квизплиз (${response.status})\n\n`;
             }
         } catch (error) {
-            messageText += `<b>${label}</b>\nв”” вќЊ РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ РґР°РЅРЅС‹Рµ\n\n`;
+            messageText += `<b>${label}</b>\n? ? Не удалось получить данные\n\n`;
         }
     }
 
     await sendTelegramMessage(targetChatId, messageText, env);
 }
 
-// --- Р¤СѓРЅРєС†РёСЏ РІС‹РІРѕРґР° СЂР°СЃРїРёСЃР°РЅРёСЏ РІСЃРµС… РёРіСЂ (/nextgame) ---
+// --- Функция вывода расписания всех игр (/nextgame) ---
 async function sendNextGamesList(targetChatId, env) {
     const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -131,24 +131,24 @@ async function sendNextGamesList(targetChatId, env) {
             const gamesList = json_data.data?.data || [];
 
             if (gamesList.length > 0) {
-                // РЎРЅР°С‡Р°Р»Р° РѕС‚РїСЂР°РІР»СЏРµРј Р·Р°РіРѕР»РѕРІРѕРє Р°С„РёС€Рё
-                await sendTelegramMessage(targetChatId, "рџ“… <b>РђРєС‚СѓР°Р»СЊРЅС‹Рµ РёРіСЂС‹ РІ СЂР°СЃРїРёСЃР°РЅРёРё РљРІРёР·, РїР»РёР·!:</b>", env);
+                // Сначала отправляем заголовок афиши
+                await sendTelegramMessage(targetChatId, "?? <b>Актуальные игры в расписании Квиз, плиз!:</b>", env);
 
-                // РџРµСЂРµР±РёСЂР°РµРј РёРіСЂС‹ Рё РєР°Р¶РґСѓСЋ РѕС‚РїСЂР°РІР»СЏРµРј РћРўР”Р•Р›Р¬РќР«Рњ СЃРѕРѕР±С‰РµРЅРёРµРј
+                // Перебираем игры и каждую отправляем ОТДЕЛЬНЫМ сообщением
                  for (const game of gamesList) {
-                    const title = game.title || "Р‘РµР· РЅР°Р·РІР°РЅРёСЏ";
-                    const placeTitle = game.place?.title || "РњРµСЃС‚Рѕ СѓС‚РѕС‡РЅСЏРµС‚СЃСЏ";
+                    const title = game.title || "Без названия";
+                    const placeTitle = game.place?.title || "Место уточняется";
                     const rawDate = game.date || ""; 
                     
                     let dayOfWeekString = "";
-                    let gameDate = "Р”Р°С‚Р° РЅРµ СѓРєР°Р·Р°РЅР°";
+                    let gameDate = "Дата не указана";
                     let gameTime = "";
 
-                    // РџР°СЂСЃРёРј РґР°С‚Сѓ Рё РѕРїСЂРµРґРµР»СЏРµРј РґРµРЅСЊ РЅРµРґРµР»Рё
+                    // Парсим дату и определяем день недели
                     if (rawDate) {
                         const dateParts = rawDate.split(" ");
-                        gameDate = dateParts[0]; // Р‘РµСЂРµРј С‚РѕР»СЊРєРѕ DD.MM.YYYY
-                        gameTime = dateParts[1] || ""; // Р‘РµСЂРµРј С‚РѕР»СЊРєРѕ HH:MM
+                        gameDate = dateParts[0]; // Берем только DD.MM.YYYY
+                        gameTime = dateParts[1] || ""; // Берем только HH:MM
 
                         const parts = gameDate.split("."); 
                         if (parts.length === 3) {
@@ -160,63 +160,63 @@ async function sendNextGamesList(targetChatId, env) {
                         }
                     }
                     
-                    // РР·РІР»РµРєР°РµРј ID РёРіСЂС‹ РёР· API
+                    // Извлекаем ID игры из API
                     const gameId = game.id || "";
 
-                    let singleGameText = `рџЋЇ <b>${title}</b>\n`;
-                    singleGameText += `рџ—“ РљРѕРіРґР°: ${gameDate} (${dayOfWeekString}) РІ ${gameTime}\n`;
-                    singleGameText += `рџ“Ќ Р“РґРµ: ${placeTitle}\n`;
-                    // Р”РѕР±Р°РІР»СЏРµРј ID РІ РІРёРґРµ СЃРєСЂС‹С‚РѕРіРѕ СЃРїРµС†СЃРёРјРІРѕР»Р° РІ СЃР°РјРѕРј РєРѕРЅС†Рµ (РІС‹РіР»СЏРґРёС‚ РєР°Рє РїСѓСЃС‚Р°СЏ СЃС‚СЂРѕРєР°)
+                    let singleGameText = `?? <b>${title}</b>\n`;
+                    singleGameText += `?? Когда: ${gameDate} (${dayOfWeekString}) в ${gameTime}\n`;
+                    singleGameText += `?? Где: ${placeTitle}\n`;
+                    // Добавляем ID в виде скрытого спецсимвола в самом конце (выглядит как пустая строка)
                     singleGameText += `<code style="display:none;">#id_${game.id}</code>`;
 
                     await sendTelegramMessage(targetChatId, singleGameText, env);
                 }
             } else {
-                await sendTelegramMessage(targetChatId, "рџ“… <b>РђС„РёС€Р° РёРіСЂ:</b> РќР° РґР°РЅРЅС‹Р№ РјРѕРјРµРЅС‚ РґРѕСЃС‚СѓРїРЅС‹С… РёРіСЂ РЅРµС‚.", env);
+                await sendTelegramMessage(targetChatId, "?? <b>Афиша игр:</b> На данный момент доступных игр нет.", env);
             }
         } else {
-            await sendTelegramMessage(targetChatId, `вќЊ РћС€РёР±РєР° API РљРІРёР·, РїР»РёР·! (${response.status})`, env);
+            await sendTelegramMessage(targetChatId, `? Ошибка API Квиз, плиз! (${response.status})`, env);
         }
     } catch (error) {
-        await sendTelegramMessage(targetChatId, "вќЊ РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° РїСЂРё Р·Р°РіСЂСѓР·РєРµ Р°С„РёС€Рё.", env);
+        await sendTelegramMessage(targetChatId, "? Произошла ошибка при загрузке афиши.", env);
     }
 
 }
 
-// --- Р¤СѓРЅРєС†РёСЏ СЃРѕР·РґР°РЅРёСЏ РѕРїСЂРѕСЃР° РєРѕРјР°РЅРґРѕР№ /poll ---
+// --- Функция создания опроса командой /poll ---
 async function handlePollCommand(chatId, originalMessage, env) {
-    // РџСЂРѕРІРµСЂСЏРµРј, СЃРґРµР»Р°РЅ Р»Рё /poll РєР°Рє РѕС‚РІРµС‚ (reply) РЅР° СЃРѕРѕР±С‰РµРЅРёРµ Р±РѕС‚Р°
+    // Проверяем, сделан ли /poll как ответ (reply) на сообщение бота
     const replyToMessage = originalMessage.reply_to_message;
     
     if (!replyToMessage || !replyToMessage.text) {
-        await sendTelegramMessage(chatId, "вљ пёЏ РћС‚РІРµС‚СЊС‚Рµ РєРѕРјР°РЅРґРѕР№ <code>/poll</code> РЅР° СЃРѕРѕР±С‰РµРЅРёРµ СЃ РЅСѓР¶РЅРѕР№ РёРіСЂРѕР№!", env);
+        await sendTelegramMessage(chatId, "?? Ответьте командой <code>/poll</code> на сообщение с нужной игрой!", env);
         return;
     }
 
     const sourceText = replyToMessage.text;
     
-     // РќРѕРІС‹Рµ С‚РѕС‡РЅС‹Рµ СЂРµРіСѓР»СЏСЂРЅС‹Рµ РІС‹СЂР°Р¶РµРЅРёСЏ РґР»СЏ СЂР°Р·Р±РѕСЂР° РѕС‚РґРµР»СЊРЅРѕРіРѕ СЃРѕРѕР±С‰РµРЅРёСЏ РёРіСЂС‹
-    const titleMatch = sourceText.match(/рџЋЇ\s*(.*)\nрџ—“/);
-    const dateMatch = sourceText.match(/рџ—“\s*РљРѕРіРґР°:\s*(.*)\nрџ“Ќ/);
-    const placeMatch = sourceText.match(/рџ“Ќ\s*Р“РґРµ:\s*(.*)/);
+     // Новые точные регулярные выражения для разбора отдельного сообщения игры
+    const titleMatch = sourceText.match(/??\s*(.*)\n??/);
+    const dateMatch = sourceText.match(/??\s*Когда:\s*(.*)\n??/);
+    const placeMatch = sourceText.match(/??\s*Где:\s*(.*)/);
 
-    const title = titleMatch ? titleMatch[1].trim() : "РљРІРёР·, РїР»РёР·!";
-    const dateInfo = dateMatch ? dateMatch[1].trim() : "Р”Р°С‚Р° РЅРµ СѓРєР°Р·Р°РЅР°";
-    const place = placeMatch ? placeMatch[1].trim() : "РњРµСЃС‚Рѕ РЅРµ СѓРєР°Р·Р°РЅРѕ";
+    const title = titleMatch ? titleMatch[1].trim() : "Квиз, плиз!";
+    const dateInfo = dateMatch ? dateMatch[1].trim() : "Дата не указана";
+    const place = placeMatch ? placeMatch[1].trim() : "Место не указано";
 
-    // Р‘РµР·РѕРїР°СЃРЅРѕ СЂР°Р·РґРµР»СЏРµРј РґР°С‚Сѓ Рё РІСЂРµРјСЏ
+    // Безопасно разделяем дату и время
     const gameDateOnly = sourceText.match(/\d{2}\.\d{2}\.\d{4}/)?.[0] || "09.06.2026";
     const gameTimeOnly = sourceText.match(/\d{2}:\d{2}/)?.[0] || "19:30";
 
 
-    // Р’С‹С‚Р°СЃРєРёРІР°РµРј ID РёРіСЂС‹ РёР· СЃРєСЂС‹С‚РѕР№ СЃСЃС‹Р»РєРё
+    // Вытаскиваем ID игры из скрытой ссылки
     const idMatch = sourceText.match(/#id_([a-zA-Z0-9-]+)/);
     const gameId = idMatch ? idMatch[1] : "";
     
-    // РЎРѕР±РёСЂР°РµРј Р»Р°РєРѕРЅРёС‡РЅС‹Р№ РІРѕРїСЂРѕСЃ РґР»СЏ РѕРїСЂРѕСЃР° (Telegram РѕРіСЂР°РЅРёС‡РёРІР°РµС‚ РґР»РёРЅСѓ РІРѕРїСЂРѕСЃР° РІ 300 СЃРёРјРІРѕР»РѕРІ)
-    const pollQuestion = `РљС‚Рѕ РёРґРµС‚ РЅР° РљРІРёР·? рџЌ©\n\nрџ“ќ ${title}\nрџ“… ${dateInfo}\nрџ“Ќ ${place}`;
+    // Собираем лаконичный вопрос для опроса (Telegram ограничивает длину вопроса в 300 символов)
+    const pollQuestion = `Кто идет на Квиз? ??\n\n?? ${title}\n?? ${dateInfo}\n?? ${place}`;
 
-    // РћС‚РїСЂР°РІР»СЏРµРј РѕРїСЂРѕСЃ (sendPoll) РїРѕ РїСЂР°РІРёР»Р°Рј Telegram API
+    // Отправляем опрос (sendPoll) по правилам Telegram API
     const pollUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendPoll`;
     const response = await fetch(pollUrl, {
         method: "POST",
@@ -224,33 +224,33 @@ async function handlePollCommand(chatId, originalMessage, env) {
         body: JSON.stringify({
             chat_id: chatId,
             question: pollQuestion,
-            options: JSON.stringify(["РРґСѓ", "РРґСѓ + 1", "Р‘РµР· РјРµРЅСЏ"]),
-            is_anonymous: false,               // РќРµ Р°РЅРѕРЅРёРјРЅС‹Р№ РѕРїСЂРѕСЃ (РІРёРґРЅРѕ РєС‚Рѕ РєР°Рє РіРѕР»РѕСЃРѕРІР°Р»)
-            allows_multiple_answers: false,    // Р’С‹Р±СЂР°С‚СЊ РјРѕР¶РЅРѕ С‚РѕР»СЊРєРѕ РѕРґРёРЅ РІР°СЂРёР°РЅС‚
-            type: "regular"                    // РћР±С‹С‡РЅС‹Р№ С‚РёРї РіРѕР»РѕСЃРѕРІР°РЅРёСЏ (РЅРµ РІРёРєС‚РѕСЂРёРЅР°)
+            options: JSON.stringify(["Иду", "Иду + 1", "Без меня"]),
+            is_anonymous: false,               // Не анонимный опрос (видно кто как голосовал)
+            allows_multiple_answers: false,    // Выбрать можно только один вариант
+            type: "regular"                    // Обычный тип голосования (не викторина)
         })
     });
-    console.log(`С‚РµРєСЃС‚: ${sourceText}`);
+    console.log(`текст: ${sourceText}`);
 
     if (response.status === 200) {
         const resJson = await response.json();
-        const pollId = resJson.result?.poll?.id; // РЈРЅРёРєР°Р»СЊРЅС‹Р№ ID РѕРїСЂРѕСЃР° Telegram
+        const pollId = resJson.result?.poll?.id; // Уникальный ID опроса Telegram
 
         if (pollId && env.QUIZ_DB) {
-            // РЎРѕС…СЂР°РЅСЏРµРј СЃС‚СЂСѓРєС‚СѓСЂСѓ РёРіСЂС‹ РІ Р±Р°Р·Сѓ РґР°РЅРЅС‹С… KV, РїСЂРёРІСЏР·С‹РІР°СЏ РµС‘ Рє ID РѕРїСЂРѕСЃР°
+            // Сохраняем структуру игры в базу данных KV, привязывая её к ID опроса
             const gameObject = {
-                gameId: gameId, // РЎР’Р•Р РҐР’РђР–РќРћ: РўРµРїРµСЂСЊ ID РёРіСЂС‹ РЅР°РґРµР¶РЅРѕ СЃРѕС…СЂР°РЅРµРЅ РІ Р±Р°Р·Сѓ РѕРїСЂРѕСЃР°
+                gameId: gameId, // СВЕРХВАЖНО: Теперь ID игры надежно сохранен в базу опроса
                 title: title,
                 date: gameDateOnly,
                 time: gameTimeOnly,
                 place: place,
-                voters: {}, // РЎСЋРґР° Р±СѓРґРµРј Р·Р°РїРёСЃС‹РІР°С‚СЊ РёРјРµРЅР° РїСЂРѕРіРѕР»РѕСЃРѕРІР°РІС€РёС…
-                resultsChecked: false // Р¤Р»Р°Рі, С‡С‚РѕР±С‹ Р±РѕС‚ Р·РЅР°Р», С‡С‚Рѕ СЂРµР·СѓР»СЊС‚Р°С‚С‹ СЌС‚РѕР№ РёРіСЂС‹ РµС‰Рµ РЅРµ РІС‹РІРѕРґРёР»РёСЃСЊ
+                voters: {}, // Сюда будем записывать имена проголосовавших
+                resultsChecked: false // Флаг, чтобы бот знал, что результаты этой игры еще не выводились
             };
             await env.QUIZ_DB.put(`poll:${pollId}`, JSON.stringify(gameObject));
-            await env.QUIZ_DB.put(`date:${gameDateOnly}`, pollId); // РРЅРґРµРєСЃ РґР»СЏ Р±С‹СЃС‚СЂРѕРіРѕ РїРѕРёСЃРєР° РїРѕ РґР°С‚Рµ
+            await env.QUIZ_DB.put(`date:${gameDateOnly}`, pollId); // Индекс для быстрого поиска по дате
 
-            // Р—Р°РїРѕРјРёРЅР°РµРј ID РёРіСЂС‹ РѕС‚РґРµР»СЊРЅРѕ РґР»СЏ РїРµСЂРёРѕРґРёС‡РµСЃРєРѕР№ РїСЂРѕРІРµСЂРєРё СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ
+            // Запоминаем ID игры отдельно для периодической проверки результатов
             if (gameId) {
                 await env.QUIZ_DB.put(`active_game:${gameId}`, JSON.stringify({ pollId: pollId, date: gameDateOnly, time: gameTimeOnly }));
             }
@@ -258,13 +258,13 @@ async function handlePollCommand(chatId, originalMessage, env) {
     }
 }
 
-// --- Р¤СѓРЅРєС†РёСЏ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ РєР»РёРєРѕРІ РЅР° РєРЅРѕРїРєРё РѕРїСЂРѕСЃР° ---
+// --- Функция отслеживания кликов на кнопки опроса ---
 async function handlePollAnswer(pollAnswer, env) {
     if (!env.QUIZ_DB) return;
 
     const pollId = pollAnswer.poll_id;
     const userId = pollAnswer.user.id;
-    const firstName = pollAnswer.user.first_name || "РРіСЂРѕРє";
+    const firstName = pollAnswer.user.first_name || "Игрок";
     const optionIds = pollAnswer.option_ids || [];
 
     const data = await env.QUIZ_DB.get(`poll:${pollId}`);
@@ -273,17 +273,17 @@ async function handlePollAnswer(pollAnswer, env) {
     let gameObject = JSON.parse(data);
 
     if (optionIds.length === 0) {
-        // РЈС‡Р°СЃС‚РЅРёРє РѕС‚РјРµРЅРёР» СЃРІРѕР№ РіРѕР»РѕСЃ
+        // Участник отменил свой голос
         delete gameObject.voters[userId];
     } else {
-        // РРЎРџР РђР’Р›Р•РќРћ: РР·РІР»РµРєР°РµРј РїРµСЂРІС‹Р№ СЌР»РµРјРµРЅС‚ РёР· РјР°СЃСЃРёРІР° РёРЅРґРµРєСЃРѕРІ РѕС‚РІРµС‚РѕРІ
+        // ИСПРАВЛЕНО: Извлекаем первый элемент из массива индексов ответов
         const choice = optionIds[0]; 
         let statusText = "";
         let count = 0;
 
-        if (choice === 0) { statusText = "РРґСѓ"; count = 1; }
-        if (choice === 1) { statusText = "РРґСѓ + 1"; count = 2; }
-        if (choice === 2) { statusText = "Р‘РµР· РјРµРЅСЏ"; count = 0; }
+        if (choice === 0) { statusText = "Иду"; count = 1; }
+        if (choice === 1) { statusText = "Иду + 1"; count = 2; }
+        if (choice === 2) { statusText = "Без меня"; count = 0; }
 
         gameObject.voters[userId] = { name: firstName, status: statusText, count: count };
     }
@@ -291,15 +291,15 @@ async function handlePollAnswer(pollAnswer, env) {
     await env.QUIZ_DB.put(`poll:${pollId}`, JSON.stringify(gameObject));
 }
 
-// --- Р¤СѓРЅРєС†РёСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРіРѕ РЅР°РїРѕРјРёРЅР°РЅРёСЏ РІ 10:00 ---
+// --- Функция автоматического напоминания в 10:00 ---
 async function checkAndSendReminders(targetChatId, env) {
     if (!env || !env.QUIZ_DB) {
-        console.log("РљСЂРёС‚РёС‡РµСЃРєР°СЏ РѕС€РёР±РєР°: Р‘Р°Р·Р° РљV РЅРµ РЅР°Р№РґРµРЅР° РІ С„СѓРЅРєС†РёРё РЅР°РїРѕРјРёРЅР°РЅРёР№.");
+        console.log("Критическая ошибка: База КV не найдена в функции напоминаний.");
         return;
     }
 
     try {
-        // РџРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РµРµ Р»РѕРєР°Р»СЊРЅРѕРµ РІСЂРµРјСЏ РІ РќРѕРІРѕРєСѓР·РЅРµС†РєРµ (РљСЂР°СЃРЅРѕСЏСЂСЃРє +7)
+        // Получаем текущее локальное время в Новокузнецке (Красноярск +7)
         const now = new Date();
         const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
         
@@ -309,31 +309,31 @@ async function checkAndSendReminders(targetChatId, env) {
         tomorrowTime.setDate(tomorrowTime.getDate() + 1);
         const tomorrowStr = formatDate(tomorrowTime);
 
-        console.log(`РџСЂРѕРІРµСЂРєР° РґР°С‚ СЂР°СЃРїРёСЃР°РЅРёСЏ. РЎРµРіРѕРґРЅСЏ: ${todayStr}, Р—Р°РІС‚СЂР°: ${tomorrowStr}`);
+        console.log(`Проверка дат расписания. Сегодня: ${todayStr}, Завтра: ${tomorrowStr}`);
 
-        // РџСЂРѕРІРµСЂСЏРµРј, Р»РµР¶Р°С‚ Р»Рё РІ Р±Р°Р·Рµ РєР»СЋС‡Рё РґР»СЏ СЌС‚РёС… РґР°С‚
+        // Проверяем, лежат ли в базе ключи для этих дат
         const todayPollId = await env.QUIZ_DB.get(`date:${todayStr}`);
         const tomorrowPollId = await env.QUIZ_DB.get(`date:${tomorrowStr}`);
 
-        console.log(`Р РµР·СѓР»СЊС‚Р°С‚ РїРѕРёСЃРєР° РІ KV -> РЎРµРіРѕРґРЅСЏС€РЅРёР№ РѕРїСЂРѕСЃ: ${todayPollId}, Р—Р°РІС‚СЂР°С€РЅРёР№ РѕРїСЂРѕСЃ: ${tomorrowPollId}`);
+        console.log(`Результат поиска в KV -> Сегодняшний опрос: ${todayPollId}, Завтрашний опрос: ${tomorrowPollId}`);
 
-        // РћС‚РїСЂР°РІР»СЏРµРј РЅР°РїРѕРјРёРЅР°РЅРёСЏ, РµСЃР»Рё РЅР°С€Р»Рё ID РѕРїСЂРѕСЃРѕРІ РІ Р±Р°Р·Рµ
+        // Отправляем напоминания, если нашли ID опросов в базе
         if (todayPollId) {
-            await processReminder(todayPollId, "РЎР•Р“РћР”РќРЇ", targetChatId, env);
+            await processReminder(todayPollId, "СЕГОДНЯ", targetChatId, env);
         }
         
         if (tomorrowPollId) {
-            await processReminder(tomorrowPollId, "Р—РђР’РўР Рђ", targetChatId, env);
+            await processReminder(tomorrowPollId, "ЗАВТРА", targetChatId, env);
         }
 
     } catch (error) {
-        console.error("РџСЂРѕРёР·РѕС€РµР» СЃР±РѕР№ РІРЅСѓС‚СЂРё checkAndSendReminders:", error.message);
-        // Р‘РѕС‚ РїРѕРґСЃС‚СЂР°С…СѓРµС‚ Рё РїСЂРёС€Р»РµС‚ РѕС€РёР±РєСѓ РІ С‡Р°С‚, С‡С‚РѕР±С‹ РІС‹ Р·РЅР°Р»Рё, РЅР° РєР°РєРѕР№ СЃС‚СЂРѕРєРµ СЃР±РѕР№
-        await sendTelegramMessage(targetChatId, `рџ’Ґ РћС€РёР±РєР° РїР»Р°РЅРёСЂРѕРІС‰РёРєР° РЅР°РїРѕРјРёРЅР°РЅРёР№:\n<code>${error.message}</code>`, env);
+        console.error("Произошел сбой внутри checkAndSendReminders:", error.message);
+        // Бот подстрахует и пришлет ошибку в чат, чтобы вы знали, на какой строке сбой
+        await sendTelegramMessage(targetChatId, `?? Ошибка планировщика напоминаний:\n<code>${error.message}</code>`, env);
     }
 }
 
-// --- РЎР±РѕСЂРєР° С‚РµРєСЃС‚Р° РЅР°РїРѕРјРёРЅР°РЅРёСЏ СЃРѕ СЃРїРёСЃРєР°РјРё Р»СЋРґРµР№ ---
+// --- Сборка текста напоминания со списками людей ---
 async function processReminder(pollId, dayText, targetChatId, env) {
     const data = await env.QUIZ_DB.get(`poll:${pollId}`);
     if (!data) return;
@@ -346,24 +346,24 @@ async function processReminder(pollId, dayText, targetChatId, env) {
         for (const user of Object.values(game.voters)) {
             if (user && user.count > 0) {
                 totalGamers += user.count;
-                playersList.push(`вЂў <b>${user.name}</b> (${user.status})`);
+                playersList.push(`• <b>${user.name}</b> (${user.status})`);
             }
         }
     }
 
-    let reminderText = `рџљЁ <b>РќРђРџРћРњРРќРђРќРР•: РРіСЂР° ${dayText}!</b> рџљЁ\n\n`;
-    reminderText += `рџЋЇ <b>${game.title}</b>\n`;
-    reminderText += `рџ“… <b>Р”Р°С‚Р°:</b> ${game.date} РІ ${game.time}\n`;
-    reminderText += `рџ“Ќ <b>Р“РґРµ:</b> ${game.place}\n\n`;
-    reminderText += `рџ“Љ <b>РўРµРєСѓС‰РёР№ СЃР±РѕСЂ СЃРѕСЃС‚Р°РІР°:</b> рџ”Ґ <u>${totalGamers} С‡РµР».</u>\n`;
+    let reminderText = `?? <b>НАПОМИНАНИЕ: Игра ${dayText}!</b> ??\n\n`;
+    reminderText += `?? <b>${game.title}</b>\n`;
+    reminderText += `?? <b>Дата:</b> ${game.date} в ${game.time}\n`;
+    reminderText += `?? <b>Где:</b> ${game.place}\n\n`;
+    reminderText += `?? <b>Текущий сбор состава:</b> ?? <u>${totalGamers} чел.</u>\n`;
     
     if (playersList.length > 0) {
-        reminderText += `\nРЎРїРёСЃРѕРє РёРґСѓС‰РёС…:\n${playersList.join("\n")}\n`;
+        reminderText += `\nСписок идущих:\n${playersList.join("\n")}\n`;
     } else {
-        reminderText += `\n<i>РџРѕРєР° РЅРёРєС‚Рѕ РЅРµ РѕС‚РјРµС‚РёР»СЃСЏ. РљРѕРјР°РЅРґР°, Р°РєС‚РёРІРЅРµРµ!</i>\n`;
+        reminderText += `\n<i>Пока никто не отметился. Команда, активнее!</i>\n`;
     }
 
-    reminderText += `\nрџ‘‰ <i>РџСЂРѕРіРѕР»РѕСЃСѓР№С‚Рµ РІ Р·Р°РєСЂРµРїР»РµРЅРЅРѕРј РѕРїСЂРѕСЃРµ, РµСЃР»Рё РµС‰Рµ РЅРµ СЃРґРµР»Р°Р»Рё СЌС‚РѕРіРѕ!</i>`;
+    reminderText += `\n?? <i>Проголосуйте в закрепленном опросе, если еще не сделали этого!</i>`;
 
     await sendTelegramMessage(targetChatId, reminderText, env);
 }
@@ -375,7 +375,7 @@ function formatDate(dateObj) {
     return `${day}.${month}.${year}`;
 }
 
-// --- Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅР°СЏ С„СѓРЅРєС†РёСЏ РѕС‚РїСЂР°РІРєРё СЃРѕРѕР±С‰РµРЅРёСЏ РІ Telegram ---
+// --- Вспомогательная функция отправки сообщения в Telegram ---
 async function sendTelegramMessage(chatId, text, env) {
     const telegramUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`;
     try {
@@ -389,7 +389,7 @@ async function sendTelegramMessage(chatId, text, env) {
             })
         });
     } catch (err) {
-        console.error("РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё РІ Telegram:", err);
+        console.error("Ошибка отправки в Telegram:", err);
     }
 }
 
@@ -397,7 +397,7 @@ async function forceTestReminder(targetChatId, env) {
     await checkAndSendReminders(targetChatId, env);
 }
 
-// --- Р¤РЈРќРљР¦РРЇ РўР Р•РљРРќР“Рђ Р Р”РћРЎРўРР–Р•РќРР™ ---
+// --- ФУНКЦИЯ ТРЕКИНГА И ДОСТИЖЕНИЙ ---
 async function trackRatingChanges(targetChatId, env) {
     if (!env.QUIZ_DB) return;
     const headers = { "User-Agent": "Mozilla/5.0" };
@@ -415,9 +415,9 @@ async function trackRatingChanges(targetChatId, env) {
                     const team = teamsList[0];
                     const currentPoints = team.points !== undefined ? team.points : 0;
                     const currentGames = team.games !== undefined ? team.games : 0;
-                    const currentRank = team.rank?.title || "Р‘РµР· СЂР°РЅРіР°";
+                    const currentRank = team.rank?.title || "Без ранга";
 
-                    // РџС‹С‚Р°РµРјСЃСЏ РґРѕСЃС‚Р°С‚СЊ РёР· Р±Р°Р·С‹ РґР°РЅРЅС‹С… СЃС‚Р°СЂС‹Рµ (РІС‡РµСЂР°С€РЅРёРµ) СЂРµР·СѓР»СЊС‚Р°С‚С‹
+                    // Пытаемся достать из базы данных старые (вчерашние) результаты
                     const dbKey = `stats:${label}`;
                     const cachedData = await env.QUIZ_DB.get(dbKey);
                     
@@ -426,28 +426,28 @@ async function trackRatingChanges(targetChatId, env) {
                         const oldPoints = oldStats.points || 0;
                         const oldGames = oldStats.games || 0;
 
-                        // Р•СЃР»Рё РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‹РіСЂР°РЅРЅС‹С… РёРіСЂ СѓРІРµР»РёС‡РёР»РѕСЃСЊ вЂ” РІС‹ РёРіСЂР°Р»Рё!
+                        // Если количество сыгранных игр увеличилось — вы играли!
                         if (currentGames > oldGames) {
                             const pointsDiff = (currentPoints - oldPoints).toFixed(1);
                             const gamesDiff = currentGames - oldGames;
 
-                            let celebrationText = `рџЋ‰ <b>Р—РђР› РЎР›РђР’Р«: РќРѕРІРѕРµ РґРѕСЃС‚РёР¶РµРЅРёРµ!</b> рџЋ‰\n\n`;
-                            celebrationText += `рџЌ© РџРѕРЅС‡РёРєРё, РІРЅРёРјР°РЅРёРµ! РћР±РЅРѕРІРёР»РёСЃСЊ С‚Р°Р±Р»РёС†С‹ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РЅР° СЃР°Р№С‚Рµ РљРІРёР·, РїР»РёР·!:\n\n`;
-                            celebrationText += `<b>РљР°С‚РµРіРѕСЂРёСЏ:</b> ${label}\n`;
-                            celebrationText += `рџ“€ <b>РџСЂРёСЂРѕСЃС‚ РѕС‡РєРѕРІ:</b> <code>+${pointsDiff}</code> Р±Р°Р»Р»РѕРІ!\n`;
-                            celebrationText += `рџЋ® <b>РЎС‹РіСЂР°РЅРѕ Р·Р° СЂР°Р·:</b> <code>+${gamesDiff}</code> РёРіСЂ(С‹)\n\n`;
-                            celebrationText += `рџЊџ <b>РўРµРєСѓС‰РёРµ РѕР±С‰РёРµ РёС‚РѕРіРё РІ СЌС‚РѕР№ Р»РёРіРµ:</b>\n`;
-                            celebrationText += `в”њ вњЁ РЎСѓРјРјР° РѕС‡РєРѕРІ: <code>${currentPoints}</code>\n`;
-                            celebrationText += `в”њ рџЋ® Р’СЃРµРіРѕ РёРіСЂ: <code>${currentGames}</code>\n`;
-                            celebrationText += `в”” рџЋ– РќР°С€ С‚РµРєСѓС‰РёР№ СЂР°РЅРі: <b>${currentRank}</b>\n\n`;
-                            celebrationText += `<i>рџ”Ґ РћС‚Р»РёС‡РЅС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚, С‚Р°Рє РґРµСЂР¶Р°С‚СЊ! Р’РїРµСЂРµРґ Рє РЅРѕРІС‹Рј РІРµСЂС€РёРЅР°Рј!</i>`;
+                            let celebrationText = `?? <b>ЗАЛ СЛАВЫ: Новое достижение!</b> ??\n\n`;
+                            celebrationText += `?? Пончики, внимание! Обновились таблицы результатов на сайте Квиз, плиз!:\n\n`;
+                            celebrationText += `<b>Категория:</b> ${label}\n`;
+                            celebrationText += `?? <b>Прирост очков:</b> <code>+${pointsDiff}</code> баллов!\n`;
+                            celebrationText += `?? <b>Сыграно за раз:</b> <code>+${gamesDiff}</code> игр(ы)\n\n`;
+                            celebrationText += `?? <b>Текущие общие итоги в этой лиге:</b>\n`;
+                            celebrationText += `? ? Сумма очков: <code>${currentPoints}</code>\n`;
+                            celebrationText += `? ?? Всего игр: <code>${currentGames}</code>\n`;
+                            celebrationText += `? ?? Наш текущий ранг: <b>${currentRank}</b>\n\n`;
+                            celebrationText += `<i>?? Отличный результат, так держать! Вперед к новым вершинам!</i>`;
 
-                            // РћС‚РїСЂР°РІР»СЏРµРј РїСЂР°Р·РґРЅРёС‡РЅРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ РІ РіСЂСѓРїРїСѓ
+                            // Отправляем праздничное уведомление в группу
                             await sendTelegramMessage(targetChatId, celebrationText, env);
                         }
                     }
 
-                    // РџРµСЂРµР·Р°РїРёСЃС‹РІР°РµРј С‚РµРєСѓС‰РёРµ Р°РєС‚СѓР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ РІ Р±Р°Р·Сѓ РєР°Рє РЅРѕРІС‹Рµ В«РІС‡РµСЂР°С€РЅРёРµВ» РґР»СЏ СЃР»РµРґСѓСЋС‰РµРіРѕ РґРЅСЏ
+                    // Перезаписываем текущие актуальные данные в базу как новые «вчерашние» для следующего дня
                     const statsToCache = {
                         points: currentPoints,
                         games: currentGames,
@@ -458,110 +458,110 @@ async function trackRatingChanges(targetChatId, env) {
                 }
             }
         } catch (error) {
-            console.error(`РћС€РёР±РєР° С‚СЂРµРєРµСЂР° РІ РєР°С‚РµРіРѕСЂРёРё ${label}:`, error);
+            console.error(`Ошибка трекера в категории ${label}:`, error);
         }
     }
 }
 
-// --- РљРћРњРђРќР”Рђ /halloffame Р”Р›РЇ Р РЈР§РќРћР“Рћ РџР РћРЎРњРћРўР Рђ РЎРћРЎРўРћРЇРќРРЇ РўР Р•РљР•Р Рђ ---
+// --- КОМАНДА /halloffame ДЛЯ РУЧНОГО ПРОСМОТРА СОСТОЯНИЯ ТРЕКЕРА ---
 async function sendHallOfFame(targetChatId, env) {
     if (!env.QUIZ_DB) {
-        await sendTelegramMessage(targetChatId, "вќЊ Р‘Р°Р·Р° РґР°РЅРЅС‹С… РЅРµ РїРѕРґРєР»СЋС‡РµРЅР°.", env);
+        await sendTelegramMessage(targetChatId, "? База данных не подключена.", env);
         return;
     }
 
-    // Р§РёС‚Р°РµРј РґР°РЅРЅС‹Рµ РёР· Р±Р°Р·С‹ РїРѕ РІСЃРµРј 4 РєР°С‚РµРіРѕСЂРёСЏРј
-    const statsClassicSeason = JSON.parse(await env.QUIZ_DB.get("stats:рџЏ† РЎРµР·РѕРЅРЅС‹Р№ СЂРµР№С‚РёРЅРі (РљР»Р°СЃСЃРёРєР°)") || "null");
-    const statsClassicGlobal = JSON.parse(await env.QUIZ_DB.get("stats:рџЊЌ РћР±С‰РёР№ СЂРµР№С‚РёРЅРі (РљР»Р°СЃСЃРёРєР°)") || "null");
-    const statsMusicSeason = JSON.parse(await env.QUIZ_DB.get("stats:рџЏ† РЎРµР·РѕРЅРЅС‹Р№ СЂРµР№С‚РёРЅРі (РљРёРЅРѕ Рё РјСѓР·С‹РєР°)") || "null");
-    const statsMusicGlobal = JSON.parse(await env.QUIZ_DB.get("stats:рџЊЌ РћР±С‰РёР№ СЂРµР№С‚РёРЅРі (РљРёРЅРѕ Рё РјСѓР·С‹РєР°)") || "null");
+    // Читаем данные из базы по всем 4 категориям
+    const statsClassicSeason = JSON.parse(await env.QUIZ_DB.get("stats:?? Сезонный рейтинг (Классика)") || "null");
+    const statsClassicGlobal = JSON.parse(await env.QUIZ_DB.get("stats:?? Общий рейтинг (Классика)") || "null");
+    const statsMusicSeason = JSON.parse(await env.QUIZ_DB.get("stats:?? Сезонный рейтинг (Кино и музыка)") || "null");
+    const statsMusicGlobal = JSON.parse(await env.QUIZ_DB.get("stats:?? Общий рейтинг (Кино и музыка)") || "null");
 
-    // Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ СЃР±РѕСЂРєРё РєСЂР°СЃРёРІРѕР№ СЃС‚СЂРѕРєРё РѕС‡РєРѕРІ/РёРіСЂ
+    // Вспомогательная функция для сборки красивой строки очков/игр
     const formatRow = (stats) => {
-        if (!stats || stats.games === 0) return "<code>РЎС‹РіСЂР°РЅРЅС‹С… РёРіСЂ РЅРµС‚</code>";
-        return `вњЁ РћС‡РєРё: <code>${stats.points}</code> | рџЋ® РРіСЂС‹: <code>${stats.games}</code>`;
+        if (!stats || stats.games === 0) return "<code>Сыгранных игр нет</code>";
+        return `? Очки: <code>${stats.points}</code> | ?? Игры: <code>${stats.games}</code>`;
     };
 
-    // Р’С‹С‚Р°СЃРєРёРІР°РµРј РѕР±С‰РёРµ СЂР°РЅРіРё (РµСЃР»Рё РґР°РЅРЅС‹С… РЅРµС‚, РїРёС€РµРј "Р‘РµР· СЂР°РЅРіР°")
-    const rankClassic = statsClassicGlobal?.rank || statsClassicSeason?.rank || "Р‘РµР· СЂР°РЅРіР°";
-    const rankMusic = statsMusicGlobal?.rank || statsMusicSeason?.rank || "Р‘РµР· СЂР°РЅРіР°";
+    // Вытаскиваем общие ранги (если данных нет, пишем "Без ранга")
+    const rankClassic = statsClassicGlobal?.rank || statsClassicSeason?.rank || "Без ранга";
+    const rankMusic = statsMusicGlobal?.rank || statsMusicSeason?.rank || "Без ранга";
 
-    // РЎР±РѕСЂРєР° РєСЂР°СЃРёРІРѕРіРѕ СЃРѕРѕР±С‰РµРЅРёСЏ
-    let messageText = `рџЏ† <b>Р—Р°Р» СЃР»Р°РІС‹ РєРѕРјР°РЅРґС‹ В«${env.TEAM_NAME}В»</b>\n\n`;
+    // Сборка красивого сообщения
+    let messageText = `?? <b>Зал славы команды «${env.TEAM_NAME}»</b>\n\n`;
 
-    // Р‘Р»РѕРє 1. РљР›РђРЎРЎРРљРђ
-    messageText += `рџ§  <b>РљР›РђРЎРЎРРљРђ (Р Р°РЅРі: ${rankClassic})</b>\n`;
-    messageText += `в”њ рџЏ† РЎРµР·РѕРЅ: ${formatRow(statsClassicSeason)}\n`;
-    messageText += `в”” рџЊЌ РћР±С‰РёР№: ${formatRow(statsClassicGlobal)}\n\n`;
+    // Блок 1. КЛАССИКА
+    messageText += `?? <b>КЛАССИКА (Ранг: ${rankClassic})</b>\n`;
+    messageText += `? ?? Сезон: ${formatRow(statsClassicSeason)}\n`;
+    messageText += `? ?? Общий: ${formatRow(statsClassicGlobal)}\n\n`;
 
-    // Р‘Р»РѕРє 2. РљРРќРћ Р РњРЈР—Р«РљРђ
-    messageText += `рџЋ¬ <b>РљРРќРћ Р РњРЈР—Р«РљРђ (Р Р°РЅРі: ${rankMusic})</b>\n`;
-    messageText += `в”њ рџЏ† РЎРµР·РѕРЅ: ${formatRow(statsMusicSeason)}\n`;
-    messageText += `в”” рџЊЌ РћР±С‰РёР№: ${formatRow(statsMusicGlobal)}\n\n`;
+    // Блок 2. КИНО И МУЗЫКА
+    messageText += `?? <b>КИНО И МУЗЫКА (Ранг: ${rankMusic})</b>\n`;
+    messageText += `? ?? Сезон: ${formatRow(statsMusicSeason)}\n`;
+    messageText += `? ?? Общий: ${formatRow(statsMusicGlobal)}\n\n`;
 
-    messageText += `<i>рџ•’ Р”Р°РЅРЅС‹Рµ РѕР±РЅРѕРІР»СЏСЋС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РєР°Р¶РґС‹Р№ РґРµРЅСЊ РІ 10:00.</i>`;
+    messageText += `<i>?? Данные обновляются автоматически каждый день в 10:00.</i>`;
 
     await sendTelegramMessage(targetChatId, messageText, env);
 }
 
-// --- РџР•Р РРћР”РР§Р•РЎРљРђРЇ РџР РћР’Р•Р РљРђ Р Р•Р—РЈР›Р¬РўРђРўРћР’ РР“Р Р« ---
+// --- ПЕРИОДИЧЕСКАЯ ПРОВЕРКА РЕЗУЛЬТАТОВ ИГРЫ ---
 async function checkLiveResults(targetChatId, env) {
     if (!env || !env.QUIZ_DB) return;
     const headers = { "User-Agent": "Mozilla/5.0" };
 
     try {
-        // РџРѕР»СѓС‡Р°РµРј РёР· Р±Р°Р·С‹ СЃРїРёСЃРѕРє РІСЃРµС… РєР»СЋС‡РµР№ Р°РєС‚РёРІРЅС‹С… РёРіСЂ
+        // Получаем из базы список всех ключей активных игр
         const list = await env.QUIZ_DB.list({ prefix: "active_game:" });
-        if (!list.keys || list.keys.length === 0) return; // Р•СЃР»Рё Р°РєС‚РёРІРЅС‹С… РёРіСЂ РЅРµС‚, Р·Р°СЃС‹РїР°РµРј
+        if (!list.keys || list.keys.length === 0) return; // Если активных игр нет, засыпаем
         
-         // РџРѕР»СѓС‡Р°РµРј С‚РµРєСѓС‰РµРµ С‚РѕС‡РЅРѕРµ РІСЂРµРјСЏ РІ РќРѕРІРѕРєСѓР·РЅРµС†РєРµ (РљСЂР°СЃРЅРѕСЏСЂСЃРє +7)
+         // Получаем текущее точное время в Новокузнецке (Красноярск +7)
         const now = new Date();
         const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
         
         for (const keyObj of list.keys) {
             const gameId = keyObj.name.replace("active_game:", "");
             
-            // Р§РёС‚Р°РµРј СЃРѕС…СЂР°РЅРµРЅРЅС‹Рµ РґР°РЅРЅС‹Рµ РѕРїСЂРѕСЃР°, С‡С‚РѕР±С‹ СѓР·РЅР°С‚СЊ РґР°С‚Сѓ Рё РІСЂРµРјСЏ РїСЂРѕРІРµРґРµРЅРёСЏ РёРіСЂС‹
+            // Читаем сохраненные данные опроса, чтобы узнать дату и время проведения игры
             const pollData = await env.QUIZ_DB.get(keyObj.name);
             if (!pollData) continue;
 
             const parsedPoll = JSON.parse(pollData);
-            // РР·РІР»РµРєР°РµРј РїРѕР»РЅС‹Рµ РґР°РЅРЅС‹Рµ РёРіСЂС‹ РёР· Р±Р°Р·С‹ РѕРїСЂРѕСЃРѕРІ
+            // Извлекаем полные данные игры из базы опросов
             const fullGameObj = await env.QUIZ_DB.get(`poll:${parsedPoll.pollId}`);
             if (!fullGameObj) continue;
 
             const game = JSON.parse(fullGameObj);
             
-            // Р•СЃР»Рё РґР°С‚Р° РёР»Рё РІСЂРµРјСЏ РЅРµ Р·Р°РїРёСЃР°Р»РёСЃСЊ (СЃС‚Р°СЂС‹Р№ РѕРїСЂРѕСЃ), РїСЂРѕРІРµСЂСЏРµРј РїРѕ СЃС‚Р°СЂРёРЅРєРµ
+            // Если дата или время не записались (старый опрос), проверяем по старинке
             if (!game.date || !game.time) {
-                console.log(`[Check] РќРµС‚ РґР°РЅРЅС‹С… РІСЂРµРјРµРЅРё РґР»СЏ РёРіСЂС‹ ${gameId}, РѕРїСЂР°С€РёРІР°СЋ РЅР°РїСЂСЏРјСѓСЋ...`);
+                console.log(`[Check] Нет данных времени для игры ${gameId}, опрашиваю напрямую...`);
             } else {
-                // РЎРѕР±РёСЂР°РµРј РїРѕР»РЅРѕС†РµРЅРЅС‹Р№ РѕР±СЉРµРєС‚ РґР°С‚С‹ Рё РІСЂРµРјРµРЅРё РЅР°С‡Р°Р»Р° РёРіСЂС‹
+                // Собираем полноценный объект даты и времени начала игры
                 // game.date: "09.06.2026", game.time: "19:30"
                 const dateParts = game.date.split(".");
                 const timeParts = game.time.split(":");
                 
                 if (dateParts.length === 3 && timeParts.length === 2) {
                     const gameStartDateTime = new Date(
-                        parseInt(dateParts[2], 10),     // Р“РѕРґ
-                        parseInt(dateParts[1], 10) - 1, // РњРµСЃСЏС† (РІ JS РѕС‚ 0)
-                        parseInt(dateParts[0], 10),     // Р”РµРЅСЊ
-                        parseInt(timeParts[0], 10),     // Р§Р°СЃ
-                        parseInt(timeParts[1], 10)      // РњРёРЅСѓС‚С‹
+                        parseInt(dateParts[2], 10),     // Год
+                        parseInt(dateParts[1], 10) - 1, // Месяц (в JS от 0)
+                        parseInt(dateParts[0], 10),     // День
+                        parseInt(timeParts[0], 10),     // Час
+                        parseInt(timeParts[1], 10)      // Минуты
                     );
 
-                    // Р”РѕР±Р°РІР»СЏРµРј Рє РІСЂРµРјРµРЅРё РЅР°С‡Р°Р»Р° РёРіСЂС‹ 2 С‡Р°СЃР° (РІСЂРµРјСЏ РЅР° РїСЂРѕРІРµРґРµРЅРёРµ РљРІРёР·Р°)
+                    // Добавляем к времени начала игры 2 часа (время на проведение Квиза)
                     const resultsAvailableTime = new Date(gameStartDateTime.getTime() + (2 * 60 * 60 * 1000));
 
-                    // Р•СЃР»Рё С‚РµРєСѓС‰РµРµ РІСЂРµРјСЏ РІ РќРѕРІРѕРєСѓР·РЅРµС†РєРµ РњР•РќР¬РЁР•, С‡РµРј РІСЂРµРјСЏ РѕРєРѕРЅС‡Р°РЅРёСЏ РёРіСЂС‹ вЂ” РїСЂРѕРїСѓСЃРєР°РµРј С€Р°Рі
+                    // Если текущее время в Новокузнецке МЕНЬШЕ, чем время окончания игры — пропускаем шаг
                     if (localTime < resultsAvailableTime) {
-                        console.log(`[Skip] Р РµР·СѓР»СЊС‚Р°С‚С‹ РёРіСЂС‹ ${game.title} РµС‰Рµ СЂР°РЅРѕ РїСЂРѕРІРµСЂСЏС‚СЊ. РРіСЂР° РЅР°С‡РЅРµС‚СЃСЏ РІ ${game.time}, РїСЂРѕРІРµСЂРєР° РґРѕСЃС‚СѓРїРЅР° РїРѕСЃР»Рµ ${resultsAvailableTime.toLocaleTimeString("ru-RU", {hour: '2-digit', minute:'2-digit'})}`);
+                        console.log(`[Skip] Результаты игры ${game.title} еще рано проверять. Игра начнется в ${game.time}, проверка доступна после ${resultsAvailableTime.toLocaleTimeString("ru-RU", {hour: '2-digit', minute:'2-digit'})}`);
                         continue; 
                     }
                 }
             }
 
-            // Р—Р°РїСЂР°С€РёРІР°РµРј РѕС„РёС†РёР°Р»СЊРЅРѕРµ API СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РљРІРёР·РїР»РёР· РїРѕ ID РёРіСЂС‹
+            // Запрашиваем официальное API результатов Квизплиз по ID игры
             const resultsUrl = `https://api.quizplease.ru/api/games/${gameId}/results`;
             const response = await fetch(resultsUrl, { headers });
             
@@ -569,29 +569,29 @@ async function checkLiveResults(targetChatId, env) {
 
             const json_data = await response.json();
             
-            // Р—Р°С‰РёС‚Р°: РџСЂРѕРІРµСЂСЏРµРј СЃРѕРѕР±С‰РµРЅРёРµ "РРіСЂР° РЅРµ РЅР°Р№РґРµРЅР°"
-            if (json_data.data && json_data.data.message === "РРіСЂР° РЅРµ РЅР°Р№РґРµРЅР°") {
+            // Защита: Проверяем сообщение "Игра не найдена"
+            if (json_data.data && json_data.data.message === "Игра не найдена") {
                 continue;
             }
 
-            // РџСЂРѕРІРµСЂСЏРµРј, РїРѕСЏРІРёР»РёСЃСЊ Р»Рё СЂРµР·СѓР»СЊС‚Р°С‚С‹ РЅР° СЃРµСЂРІРµСЂРµ (РѕР±С‹С‡РЅРѕ РєР»СЋС‡ status: "ok" Рё РјР°СЃСЃРёРІ РЅРµ РїСѓСЃС‚РѕР№)
+            // Проверяем, появились ли результаты на сервере (обычно ключ status: "ok" и массив не пустой)
             const resultsTable = json_data.data?.results || [];
             
             if (resultsTable.length > 0) {
-                console.log(`рџЋ‰ РќР°Р№РґРµРЅС‹ СЂРµР·СѓР»СЊС‚Р°С‚С‹ РґР»СЏ РёРіСЂС‹ ID: ${gameId}`);
+                console.log(`?? Найдены результаты для игры ID: ${gameId}`);
 
-                // РС‰РµРј РЅР°С€Сѓ РєРѕРјР°РЅРґСѓ "TEAM_NAME" РІ С‚Р°Р±Р»РёС†Рµ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РёРіСЂС‹
-                // РџСЂРёРІРѕРґРёРј Рє РЅРёР¶РЅРµРјСѓ СЂРµРіРёСЃС‚СЂСѓ Рё СѓР±РёСЂР°РµРј РєР°РІС‹С‡РєРё РґР»СЏ РЅР°РґРµР¶РЅРѕСЃС‚Рё
-                const cleanTeamName = env.TEAM_NAME.toLowerCase().replace(/[В«В»"']/g, "");
+                // Ищем нашу команду "TEAM_NAME" в таблице результатов игры
+                // Приводим к нижнему регистру и убираем кавычки для надежности
+                const cleanTeamName = env.TEAM_NAME.toLowerCase().replace(/[«»"']/g, "");
                 const ourResult = resultsTable.find(r => 
-                    r.team && r.team.title && r.team.title.toLowerCase().replace(/[В«В»"']/g, "").includes(cleanTeamName)
+                    r.team && r.team.title && r.team.title.toLowerCase().replace(/[«»"']/g, "").includes(cleanTeamName)
                 );
 
                 if (ourResult) {
-                    const position = ourResult.place || "РЅРµ СѓРєР°Р·Р°РЅРѕ";
+                    const position = ourResult.place || "не указано";
                     const totalPoints = ourResult.total || 0;
 
-                    let gameTitle = "РџСЂРѕС€РµРґС€РёР№ РљРІРёР·, РїР»РёР·!";
+                    let gameTitle = "Прошедший Квиз, плиз!";
                     const pollData = await env.QUIZ_DB.get(keyObj.name);
                     if (pollData) {
                         const parsedPoll = JSON.parse(pollData);
@@ -599,25 +599,25 @@ async function checkLiveResults(targetChatId, env) {
                         if (fullGameObj) gameTitle = JSON.parse(fullGameObj).title || gameTitle;
                     }
 
-                    // Р¤РѕСЂРјРёСЂСѓРµРј РїРѕР±РµРґРЅС‹Р№ С‚РµРєСЃС‚
-                    let text = `рџЏ† <b>Р Р•Р—РЈР›Р¬РўРђРўР« РР“Р Р« Р”РћРЎРўРЈРџРќР«!</b> рџЏ†\n\n`;
-                    text += `рџЌ© РљРѕРјР°РЅРґР° <b>В«${env.TEAM_NAME}В»</b>, РѕС‚Р»РёС‡РЅС‹Рµ РЅРѕРІРѕСЃС‚Рё! РќР° СЃР°Р№С‚Рµ РѕРїСѓР±Р»РёРєРѕРІР°Р»Рё РёС‚РѕРіРё РёРіСЂС‹:\n\n`;
-                    text += `рџЋЇ <b>РРіСЂР°:</b> ${gameTitle}\n`;
-                    text += `рџЋ– <b>Р—Р°РЅСЏС‚РѕРµ РјРµСЃС‚Рѕ:</b> рџ”Ґ <b>${position} РјРµСЃС‚Рѕ</b> рџ”Ґ\n`;
-                    text += `вњЁ <b>Р’СЃРµРіРѕ Р±Р°Р»Р»РѕРІ:</b> <code>${totalPoints}</code>\n\n`;
-                    text += `<i>РљСЂР°СЃР°РІС‡РёРєРё! Р“РѕСЂРґРёРјСЃСЏ РєР°Р¶РґС‹Рј РїРѕРЅС‡РёРєРѕРј! РЎР»Р°РґРєР°СЏ РёРіСЂР°! рџЌ©рџ’Є</i>`;
+                    // Формируем победный текст
+                    let text = `?? <b>РЕЗУЛЬТАТЫ ИГРЫ ДОСТУПНЫ!</b> ??\n\n`;
+                    text += `?? Команда <b>«${env.TEAM_NAME}»</b>, отличные новости! На сайте опубликовали итоги игры:\n\n`;
+                    text += `?? <b>Игра:</b> ${gameTitle}\n`;
+                    text += `?? <b>Занятое место:</b> ?? <b>${position} место</b> ??\n`;
+                    text += `? <b>Всего баллов:</b> <code>${totalPoints}</code>\n\n`;
+                    text += `<i>Красавчики! Гордимся каждым пончиком! Сладкая игра! ????</i>`;
                     await sendTelegramMessage(targetChatId, text, env);
 
-                    // // 2. РЎР±РѕСЂРєР° С‡РёСЃС‚РѕРіРѕ HTML/CSS РєРѕРґР° С‚Р°Р±Р»РёС†С‹ СЂР°СѓРЅРґРѕРІ РїРѕ РІСЃРµРј РєРѕРјР°РЅРґР°Рј
+                    // // 2. Сборка чистого HTML/CSS кода таблицы раундов по всем командам
                     let rowsHtml = "";
                     resultsTable.forEach((row) => {
-                        const isOurTeam = row.team?.title?.toLowerCase().replace(/[В«В»"']/g, "").includes(env.TEAM_NAME.toLowerCase().replace(/[В«В»"']/g, ""));
+                        const isOurTeam = row.team?.title?.toLowerCase().replace(/[«»"']/g, "").includes(env.TEAM_NAME.toLowerCase().replace(/[«»"']/g, ""));
                         const rowClass = isOurTeam ? 'class="our-team"' : '';
                         const r = row.rounds || {};
                         rowsHtml += `
                             <tr data-v-001abdab="" ${rowClass}>
                                 <th data-v-001abdab="">${row.place}</th>
-                                <th data-v-001abdab="">${row.team?.title || "Р‘РµР· РЅР°Р·РІР°РЅРёСЏ"}</th>
+                                <th data-v-001abdab="">${row.team?.title || "Без названия"}</th>
                                 <th data-v-001abdab="">${row.total || 0}</th>
                                 <th data-v-001abdab="">${r["1"] || 0}</th>
                                 <th data-v-001abdab="">${r["2"] || 0}</th>
@@ -670,23 +670,23 @@ async function checkLiveResults(targetChatId, env) {
                         <table data-v-001abdab="" aria-hidden="true">
                             <thead data-v-001abdab="">
                                 <tr data-v-001abdab="">
-                                    <th data-v-001abdab="">РњРµСЃС‚Рѕ</th>
-                                    <th data-v-001abdab="">РќР°Р·РІР°РЅРёРµ РєРѕРјР°РЅРґС‹</th>
-                                    <th data-v-001abdab="">РС‚РѕРіРѕ</th>
-                                    <th data-v-001abdab="">1 СЂР°СѓРЅРґ</th>
-                                    <th data-v-001abdab="">2 СЂР°СѓРЅРґ</th>
-                                    <th data-v-001abdab="">3 СЂР°СѓРЅРґ</th>
-                                    <th data-v-001abdab="">4 СЂР°СѓРЅРґ</th>
-                                    <th data-v-001abdab="">5 СЂР°СѓРЅРґ</th>
-                                    <th data-v-001abdab="">6 СЂР°СѓРЅРґ</th>
-                                    <th data-v-001abdab="">7 СЂР°СѓРЅРґ</th>
+                                    <th data-v-001abdab="">Место</th>
+                                    <th data-v-001abdab="">Название команды</th>
+                                    <th data-v-001abdab="">Итого</th>
+                                    <th data-v-001abdab="">1 раунд</th>
+                                    <th data-v-001abdab="">2 раунд</th>
+                                    <th data-v-001abdab="">3 раунд</th>
+                                    <th data-v-001abdab="">4 раунд</th>
+                                    <th data-v-001abdab="">5 раунд</th>
+                                    <th data-v-001abdab="">6 раунд</th>
+                                    <th data-v-001abdab="">7 раунд</th>
                                 </tr>
                             </thead>
                             <tbody data-v-001abdab="">${rowsHtml}</tbody>                   
                         </table>
                     </div>`;
 
-                    // 3. РћС‚РїСЂР°РІР»СЏРµРј HTML РЅР° РѕС‚СЂРёСЃРѕРІРєСѓ РІ Pictify.io API
+                    // 3. Отправляем HTML на отрисовку в Pictify.io API
                     const renderResponse = await fetch("https://api.pictify.io/image", {
                         method: "POST",
                         headers: { 
@@ -697,25 +697,25 @@ async function checkLiveResults(targetChatId, env) {
                             html: fullHtml,
                             width: 900,
                             "selector": "body",
-                            "fileExtension": "png" // Р—Р°РґР°РµРј Р¶РµСЃС‚РєСѓСЋ С€РёСЂРёРЅСѓ РєР°СЂС‚РёРЅРєРё С‚Р°Р±Р»РёС†С‹
+                            "fileExtension": "png" // Задаем жесткую ширину картинки таблицы
                         })
                     });
 
                     if (renderResponse.status === 200) {
-                        // Р§РёС‚Р°РµРј JSON-РѕС‚РІРµС‚ РѕС‚ Pictify, С‡С‚РѕР±С‹ Р·Р°Р±СЂР°С‚СЊ СЃСЃС‹Р»РєСѓ РЅР° РіРѕС‚РѕРІСѓСЋ РєР°СЂС‚РёРЅРєСѓ
+                        // Читаем JSON-ответ от Pictify, чтобы забрать ссылку на готовую картинку
                         const resData = await renderResponse.json();
-                        const imageUrl = resData.url || renderResponse.url; // Р”РѕСЃС‚Р°РµРј URL РєР°СЂС‚РёРЅРєРё
+                        const imageUrl = resData.url || renderResponse.url; // Достаем URL картинки
 
                         if (imageUrl) {
-                            // Р’РђР–РќРћ: РЎРєР°С‡РёРІР°РµРј СЃР°РјСѓ PNG-РєР°СЂС‚РёРЅРєСѓ РїРѕ РїРѕР»СѓС‡РµРЅРЅРѕРјСѓ Р°РґСЂРµСЃСѓ
+                            // ВАЖНО: Скачиваем саму PNG-картинку по полученному адресу
                             const imageResponse = await fetch(imageUrl);
                             const imageBlob = await imageResponse.blob();
 
-                            // 4. РћС‚РїСЂР°РІР»СЏРµРј СЃРєР°С‡Р°РЅРЅС‹Р№ PNG-С„Р°Р№Р» РІ Telegram С‡Р°С‚
+                            // 4. Отправляем скачанный PNG-файл в Telegram чат
                             const formData = new FormData();
                             formData.append("chat_id", targetChatId);
                             formData.append("photo", imageBlob, "result_table.png");
-                            formData.append("caption", `рџ“Љ РЁР°С…РјР°С‚РєР° СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ: ${gameTitle}`);
+                            formData.append("caption", `?? Шахматка результатов: ${gameTitle}`);
 
                             await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`, {
                                 method: "POST",
@@ -725,11 +725,11 @@ async function checkLiveResults(targetChatId, env) {
                     }
                 }
                     
-                // РћР§Р•РќР¬ Р’РђР–РќРћ: РЈРґР°Р»СЏРµРј РёРіСЂСѓ РёР· Р±Р°Р·С‹ Р°РєС‚РёРІРЅРѕРіРѕ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ, С‡С‚РѕР±С‹ РёСЃРєР»СЋС‡РёС‚СЊ РґСѓР±Р»РёСЂРѕРІР°РЅРёРµ СЃРѕРѕР±С‰РµРЅРёР№!
+                // ОЧЕНЬ ВАЖНО: Удаляем игру из базы активного отслеживания, чтобы исключить дублирование сообщений!
                 await env.QUIZ_DB.delete(keyObj.name);
             }  
         }
     } catch (error) {
-        console.error("РћС€РёР±РєР° РІ С„СѓРЅРєС†РёРё checkLiveResults:", error.message);
+        console.error("Ошибка в функции checkLiveResults:", error.message);
     }
 }
