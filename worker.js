@@ -52,7 +52,6 @@ export default {
 
                     if (text.startsWith("/stats")) ctx.waitUntil(sendStats(chatId, env));
                     if (text.startsWith("/nextgame")) ctx.waitUntil(sendNextGamesList(chatId, env));
-                    // if (text.startsWith("/poll")) ctx.waitUntil(handlePollCommand(chatId, payload.message, env));
                     if (text.startsWith("/remind")) ctx.waitUntil(forceTestReminder(chatId, env));
                     if (text.startsWith("/halloffame") || text.startsWith("/hof")) {
                         ctx.waitUntil(sendHallOfFame(chatId, env));
@@ -678,7 +677,7 @@ async function checkLiveResults(targetChatId, env) {
                 );
 
                 if (ourResult) {
-                    const position = ourResult.place || "не указано";
+                    const position = parseInt(ourResult.place || ourResult.rank, 10) || 99;
                     const totalPoints = ourResult.total || 0;
 
                     let gameTitle = "Прошедший Квиз, плиз!";
@@ -688,14 +687,29 @@ async function checkLiveResults(targetChatId, env) {
                         const fullGameObj = await env.QUIZ_DB.get(`poll:${parsedPoll.pollId}`);
                         if (fullGameObj) gameTitle = JSON.parse(fullGameObj).title || gameTitle;
                     }
-
+                    
+                    let celebrationText = "";
+                    if (position === 1) {
+                        celebrationText = `🥇 <b>ЧЕМПИОНЫ! ПЕРВОЕ МЕСТО!</b> 🥇\n\n🍩 Пончики, это абсолютный триумф! Мы разнесли этот квиз в щепки и забрали золото! Невероятная игра, гордимся каждым! Вы лучшие! 🎉🥳👑`;
+                    } else if (position <= 3) {
+                        celebrationText = `🏆 <b>МЫ В ТРОЙКЕ ЛИДЕРОВ! ПОДИУМ!</b> 🏆\n\n🍩 Шикарный результат! Залетели на пьедестал почета и забрали диплом! До золота оставалось совсем чуть-чуть, в следующий раз оно точно наше! Настоящие топ-игроки! 🎉🥈🥉💪`;
+                    } else if (position <= 5) {
+                        celebrationText = `🔥 <b>МЫ В ТОП-5 ЛУЧШИХ КОМАНД!</b> 🔥\n\n🍩 Отличная игра! Уверенно закрепились в пятерке сильнейших команд города. Боролись до последнего вопроса, отличный сбор состава и крутой результат! Шаг за шагом к вершине! 🚀👏`;
+                    } else if (position <= 10) {
+                        celebrationText = `📊 <b>СТАБИЛЬНЫЙ ТОП-10!</b> 📊\n\n🍩 Хорошая, плотная игра! Вошли в десятку лучших, набрали приличное количество баллов в общий зачет. Разберем ошибки, поднажмем на следующем квизе и ворвемся на подиум! 👍✨`;
+                    } else if (position <= 20) {
+                        celebrationText = `🎯 <b>Результаты игры опубликованы</b> 🎯\n\n🍩 Отыграли в двадцатке сильнейших. Игра была непростой, вопросы попались с подвохом, но мы держались достойно! Главное — отлично провели время вместе! 🤝🥨`;
+                    } else {
+                        celebrationText = `🦾 <b>Главное не победа, а пончики к чаю!</b> 🦾\n\n🍩 Этот квиз выдался максимально жестким, и мы оказались за пределами топ-20. Но пончики не сдаются! Это просто разминка перед грандиозным камбэком. Набираемся сил и берем реванш! 🍩❤️⚔️`;
+                    }
+                    
                     // Формируем победный текст
-                    let text = `🏆 <b>РЕЗУЛЬТАТЫ ИГРЫ ДОСТУПНЫ!</b> 🏆\n\n`;
-                    text += `Команда, на сайте опубликовали итоги игры:\n\n`;
+                    let text = `🏆 <b>РЕЗУЛЬТАТЫ ИГРЫ ОПУБЛИКОВАНЫ!</b> 🏆\n\n`;
+                    text += `${celebrationText}\n\n`;
                     text += `🎯 <b>Игра:</b> ${gameTitle}\n`;
                     text += `🎖 <b>Занятое место: ${position} место\n`;
                     text += `✨ <b>Всего баллов:</b> <code>${totalPoints}</code>\n\n`;
-                    text += `<i>Красавчики! Гордимся каждым пончиком! 💪</i>`;
+                    
                     await sendTelegramMessage(targetChatId, text, env);
 
                     // // 2. Сборка чистого HTML/CSS кода таблицы раундов по всем командам
