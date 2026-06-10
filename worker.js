@@ -169,12 +169,10 @@ async function sendNextGamesList(targetChatId, env) {
                     // Извлекаем ID игры из API
                     const gameUrl = `https://${env.CITY_SLUG}.quizplease.ru/game/${game.id}`;
 
-                    let singleGameText = `🎯 <b>${title}</b>\n`;
+                    let singleGameText = `🎯 <a href="${gameUrl}"><b>${title}</b></a>\n`;
                     singleGameText += `🗓 Когда: ${gameDate} (${dayOfWeekString}) в ${gameTime}\n`;
                     singleGameText += `📍 Где: ${placeTitle}\n`;
-                    // Добавляем ID в виде скрытого спецсимвола в самом конце (выглядит как пустая строка)
-                    singleGameText += `<code style="display:none;">#id_${game.id}</code>`;
-
+                    
                     await sendTelegramMessage(targetChatId, singleGameText, env);
                 }
             } else {
