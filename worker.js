@@ -167,7 +167,7 @@ async function sendNextGamesList(targetChatId, env) {
                     }
                     
                     // Извлекаем ID игры из API
-                    const gameId = game.id || "";
+                    const gameUrl = `https://${env.CITY_SLUG}.quizplease.ru/game/${game.id}`;
 
                     let singleGameText = `🎯 <b>${title}</b>\n`;
                     singleGameText += `🗓 Когда: ${gameDate} (${dayOfWeekString}) в ${gameTime}\n`;
@@ -201,8 +201,11 @@ async function handlePollCommand(chatId, originalMessage, env) {
 
     const sourceText = replyToMessage.text;
     
+    const idMatch = sourceText.match(/href="https:\/\/.*?\.quizplease\.ru\/game\/([a-zA-Z0-9-]+)"/);
+    const gameId = idMatch ? idMatch[1] : "";
+
      // Новые точные регулярные выражения для разбора отдельного сообщения игры
-    const titleMatch = sourceText.match(/🎯\s*(.*)\n🗓/);
+    const titleMatch = sourceText.match(/🎯\s*<a .*?><b>(.*?)<\/b><\/a>/);
     const dateMatch = sourceText.match(/🗓\s*Когда:\s*(.*)\n📍/);
     const placeMatch = sourceText.match(/📍\s*Где:\s*(.*)/);
 
@@ -214,11 +217,6 @@ async function handlePollCommand(chatId, originalMessage, env) {
     const gameDateOnly = sourceText.match(/\d{2}\.\d{2}\.\d{4}/)?.[0] || "09.06.2026";
     const gameTimeOnly = sourceText.match(/\d{2}:\d{2}/)?.[0] || "19:30";
 
-
-    // Вытаскиваем ID игры из скрытой ссылки
-    const idMatch = sourceText.match(/#id_([a-zA-Z0-9-]+)/);
-    const gameId = idMatch ? idMatch[1] : "";
-    
     // Собираем лаконичный вопрос для опроса (Telegram ограничивает длину вопроса в 300 символов)
     const pollQuestion = `Кто идет на Квиз?\n\n📝 ${title}\n📅 ${dateInfo}\n📍 ${place}`;
 
