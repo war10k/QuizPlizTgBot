@@ -1,12 +1,19 @@
-const URLS = {
-    "🏆 Сезонный рейтинг (Классика)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=1&bySeason=true&page=1&perPage=20&order=points&orderBy=desc",
-    "🌍 Общий рейтинг (Классика)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=1&bySeason=false&page=1&perPage=20&order=points&orderBy=desc",
-    "🏆 Сезонный рейтинг (Кино и музыка)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=2&bySeason=true&page=1&perPage=20&order=points&orderBy=desc",
-    "🌍 Общий рейтинг (Кино и музыка)": "https://rating-api.quizplease.ru/api/external/team?city=nvkz&rating=2&bySeason=false&page=1&perPage=20&order=points&orderBy=desc",
-};
+// --- Динамическая сборка ссылок под любой город ---
+function getApiEndpoints(env) {
 
-// API расписания игр в Новокузнецке (ID: 93)
-const SCHEDULE_API = "https://api.quizplease.ru/api/games/schedule/93?order=date&meta[]=places_ids&meta[]=dates&statuses[]=0&statuses[]=1&statuses[]=2&statuses[]=3&statuses[]=5";
+    let URLS = `https://rating-api.quizplease.ru/api/external/team?city=${env.CITY_SLUG}`;
+
+    return {
+        "🏆 Сезонный рейтинг (Кино и музыка)": `${URLS}&rating=2&bySeason=true`,
+        "🌍 Общий рейтинг (Кино и музыка)": `${URLS}&rating=2&bySeason=false`,
+        "🌍 Общий рейтинг (Классика)": `${URLS}&rating=1&bySeason=false`,
+        "🏆 Сезонный рейтинг (Классика)": `${URLS}&rating=1&bySeason=true`
+    };
+}
+
+function getScheduleApi(env) {
+    return `https://api.quizplease.ru/api/games/schedule/${env.CITY_ID}?order=date&meta[]=places_ids&meta[]=dates&statuses[]=0&statuses[]=1&statuses[]=2&statuses[]=3&statuses[]=5`;
+}
 
 const DAYS_OF_WEEK = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 
@@ -85,7 +92,7 @@ async function sendStats(targetChatId, env) {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     };
 
-    for (const [label, baseUrl] of Object.entries(URLS)) {
+    for (const [label, baseUrl] of Object.entries(getApiEndpoints(env))) {
         try {
             const fullUrl = `${baseUrl}&title=${encodeURIComponent(env.TEAM_NAME)}`;
             
@@ -124,7 +131,7 @@ async function sendNextGamesList(targetChatId, env) {
     };
 
     try {
-        const response = await fetch(SCHEDULE_API, { headers });
+        const response = await fetch(getScheduleApi(env), { headers });
         if (response.status === 200) {
             const json_data = await response.json();
             const gamesList = json_data.data?.data || [];
@@ -213,7 +220,7 @@ async function handlePollCommand(chatId, originalMessage, env) {
     const gameId = idMatch ? idMatch[1] : "";
     
     // Собираем лаконичный вопрос для опроса (Telegram ограничивает длину вопроса в 300 символов)
-    const pollQuestion = `Кто идет на Квиз? 🍩\n\n📝 ${title}\n📅 ${dateInfo}\n📍 ${place}`;
+    const pollQuestion = `Кто идет на Квиз?\n\n📝 ${title}\n📅 ${dateInfo}\n📍 ${place}`;
 
     // Отправляем опрос (sendPoll) по правилам Telegram API
     const pollUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendPoll`;
@@ -401,7 +408,7 @@ async function trackRatingChanges(targetChatId, env) {
     if (!env.QUIZ_DB) return;
     const headers = { "User-Agent": "Mozilla/5.0" };
 
-    for (const [label, baseUrl] of Object.entries(URLS)) {
+    for (const [label, baseUrl] of Object.entries(getApiEndpoints(env))) {
         try {
             const fullUrl = `${baseUrl}&title=${encodeURIComponent(env.TEAM_NAME)}`;
             const response = await fetch(fullUrl, { headers });
@@ -431,7 +438,7 @@ async function trackRatingChanges(targetChatId, env) {
                             const gamesDiff = currentGames - oldGames;
 
                             let celebrationText = `🎉 <b>ЗАЛ СЛАВЫ: Новое достижение!</b> 🎉\n\n`;
-                            celebrationText += `🍩 Пончики, внимание! Обновились таблицы результатов на сайте Квиз, плиз!:\n\n`;
+                            celebrationText += `🍩 Пончики, обновились таблицы результатов на сайте Квиз, плиз!:\n\n`;
                             celebrationText += `<b>Категория:</b> ${label}\n`;
                             celebrationText += `📈 <b>Прирост очков:</b> <code>+${pointsDiff}</code> баллов!\n`;
                             celebrationText += `🎮 <b>Сыграно за раз:</b> <code>+${gamesDiff}</code> игр(ы)\n\n`;
@@ -600,11 +607,11 @@ async function checkLiveResults(targetChatId, env) {
 
                     // Формируем победный текст
                     let text = `🏆 <b>РЕЗУЛЬТАТЫ ИГРЫ ДОСТУПНЫ!</b> 🏆\n\n`;
-                    text += `🍩 Команда <b>«${env.TEAM_NAME}»</b>, отличные новости! На сайте опубликовали итоги игры:\n\n`;
+                    text += `Команда, на сайте опубликовали итоги игры:\n\n`;
                     text += `🎯 <b>Игра:</b> ${gameTitle}\n`;
-                    text += `🎖 <b>Занятое место:</b> 🔥 <b>${position} место</b> 🔥\n`;
+                    text += `🎖 <b>Занятое место: ${position} место\n`;
                     text += `✨ <b>Всего баллов:</b> <code>${totalPoints}</code>\n\n`;
-                    text += `<i>Красавчики! Гордимся каждым пончиком! Сладкая игра! 🍩💪</i>`;
+                    text += `<i>Красавчики! Гордимся каждым пончиком! 💪</i>`;
                     await sendTelegramMessage(targetChatId, text, env);
 
                     // // 2. Сборка чистого HTML/CSS кода таблицы раундов по всем командам
@@ -714,7 +721,7 @@ async function checkLiveResults(targetChatId, env) {
                             const formData = new FormData();
                             formData.append("chat_id", targetChatId);
                             formData.append("photo", imageBlob, "result_table.png");
-                            formData.append("caption", `📊 Шахматка результатов: ${gameTitle}`);
+                            formData.append("caption", `📊 Таблица результатов: ${gameTitle}`);
 
                             await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`, {
                                 method: "POST",
