@@ -64,6 +64,8 @@ export default {
                     if (text.startsWith("/poll")) {
                         ctx.waitUntil(sendPollMenu(chatId, env));
                     }
+
+                    if (text.startsWith("/ping")) ctx.waitUntil(pingTeam(chatId, env));
                 }
             } catch (e) {
                 console.error("Ошибка обработки:", e);
@@ -238,6 +240,14 @@ async function sendPollMenu(targetChatId, env) {
             ]);
         });
 
+        // +++ Добавляем в самый конец меню кнопку отмены +++
+        inlineKeyboard.push([
+            {
+                text: "❌ Отмена",
+                callback_data: "cancel_menu" // Специальный скрытый сигнал для отмены
+            }
+        ]);
+
         await fetch(tgUrl(env, "sendMessage"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -260,6 +270,33 @@ async function handleCallbackQuery(callbackQuery, env) {
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const data = callbackQuery.data || "";
+
+    // +++ ЛОВИМ НАЖАТИЕ КНОПКИ ОТМЕНЫ МЕНЮ ОПРОСОВ +++
+    if (data === "cancel_menu") {
+        try {
+            // 1. Гасим анимацию часиков на кнопке Telegram
+            await fetch(tgUrl(env, "answerCallbackQuery"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ callback_query_id: callbackQuery.id })
+            });
+
+            // 2. Удаляем само сообщение с кнопками из чата
+            await fetch(tgUrl(env, "deleteMessage"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+            });
+        } catch (err) {
+            console.error("Ошибка при отмене меню:", err);
+        }
+        return; // Мгновенно завершаем работу функции
+    }
+
+    if (data.startsWith("png:")) {
+        ctx.waitUntil(executeLivePing(chatId, messageId, data.replace("png:", ""), callbackQuery.id, env));
+        return;
+    }
 
     if (!data.startsWith("btn:")) return;
     const gameId = data.replace("btn:", "");
@@ -333,11 +370,13 @@ async function handleCallbackQuery(callbackQuery, env) {
 
             if (pollId) {
                 const gameObject = {
+                    gameId: gameId, // СВЕРХВАЖНО: Теперь ID игры надежно сохранен в базу опроса
                     title: title,
                     date: gameDate,
                     time: gameTime,
                     place: placeTitle,
-                    voters: {}
+                    voters: {},
+                    resultsChecked: false // Флаг, чтобы бот знал, что результаты этой игры еще не выводились
                 };
                 await env.QUIZ_DB.put(`poll:${pollId}`, JSON.stringify(gameObject));
                 await env.QUIZ_DB.put(`date:${gameDate}`, pollId);
@@ -358,6 +397,7 @@ async function handlePollAnswer(pollAnswer, env) {
     const userId = pollAnswer.user.id;
     const firstName = pollAnswer.user.first_name || "Игрок";
     const optionIds = pollAnswer.option_ids || [];
+    const username = pollAnswer.user.username || "";
 
     const data = await env.QUIZ_DB.get(`poll:${pollId}`);
     if (!data) return;
@@ -376,11 +416,81 @@ async function handlePollAnswer(pollAnswer, env) {
         if (choice === 0) { statusText = "Иду"; count = 1; }
         if (choice === 1) { statusText = "Иду + 1"; count = 2; }
         if (choice === 2) { statusText = "Без меня"; count = 0; }
-
-        gameObject.voters[userId] = { name: firstName, status: statusText, count: count };
+        
+        gameObject.voters[userId] = { name: firstName, username: username, status: statusText, count: count };
     }
 
     await env.QUIZ_DB.put(`poll:${pollId}`, JSON.stringify(gameObject));
+
+    // +++ НОВАЯ ЛОГИКА: АВТОМАТИЧЕСКИЙ ПОДСЧЕТ ЛИМИТА СТОЛА (9 ЧЕЛОВЕК) +++
+    try {
+        let totalSeats = 0;
+        if (gameObject.voters) {
+            for (const user of Object.values(gameObject.voters)) {
+                if (user && user.count > 0) {
+                    totalSeats += user.count; // Плюсуем места (Иду = 1, Иду + 1 = 2)
+                }
+            }
+        }
+
+        const MAX_SEATS = 9; // Официальный лимит стола Квиз, плиз!
+
+        // Проверяем, набран ли состав впервые
+        // Чтобы бот не спамил при каждом клике после 9, проверяем точное совпадение или флаг
+        const limitAlertSentKey = `alert_sent:${pollId}`;
+        const isAlertSent = await env.QUIZ_DB.get(limitAlertSentKey);
+
+        if (totalSeats >= MAX_SEATS && !isAlertSent) {
+            console.log(`🔥 Основной состав собран (${totalSeats}/${MAX_SEATS}). Отправляю алерт.`);
+
+            let alertText = `🔥 <b>ОСНОВНОЙ СОСТАВ СОБРАН! (${totalSeats}/${MAX_SEATS})</b> 🔥\n\n`;
+            alertText += `🍩 Команда, у нас полный стол на игру «<b>${gameObject.title}</b>»!\n`;
+            alertText += `⏳ Все последующие голоса автоматически пойдут в <b>запасной состав</b> на случай замен.\n\n`;
+            alertText += `💳 <i>Капитану пора регистрировать команду на сайте!</i>`;
+
+            await sendTelegramMessage(env.CHAT_ID, alertText, env);
+
+            // Ставим метку в базу, чтобы бот отправил это поздравление строго 1 раз
+            await env.QUIZ_DB.put(limitAlertSentKey, "true");
+        } 
+        // Если люди поубирали голоса и мест стало меньше 9, сбрасываем метку для возможности повторного триггера
+        else if (totalSeats < MAX_SEATS && isAlertSent) {
+            await env.QUIZ_DB.delete(limitAlertSentKey);
+        }
+    } catch (limitErr) {
+        console.error("Ошибка контроля лимита стола:", limitErr);
+    }
+
+    // +++ ШАГ Б: АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ ГЛОБАЛЬНОГО СПИСКА КОМАНДЫ +++
+    try {
+        const userId = pollAnswer.user.id;
+        const firstName = pollAnswer.user.first_name || "Игрок";
+        const username = pollAnswer.user.username || "";
+
+        const cachedTeam = await env.QUIZ_DB.get("global_team_members");
+        let teamList = cachedTeam ? JSON.parse(cachedTeam) : [];
+
+        // Проверяем, есть ли уже этот пользователь в нашей базе по его уникальному ID
+        const exists = teamList.some(member => member.id === userId);
+
+        if (!exists) {
+            // Если игрока нет, добавляем его структуру в массив
+            teamList.push({ id: userId, name: firstName, username: username });
+            // Сохраняем обновленный состав команды обратно в KV
+            await env.QUIZ_DB.put("global_team_members", JSON.stringify(teamList));
+            console.log(`👤 В глобальный список команды успешно добавлен новый игрок: ${firstName}`);
+        } else {
+            // Если игрок уже был, но сменил ник в Telegram, точечно обновим его данные
+            const index = teamList.findIndex(member => member.id === userId);
+            if (teamList[index].username !== username || teamList[index].name !== firstName) {
+                teamList[index].name = firstName;
+                teamList[index].username = username;
+                await env.QUIZ_DB.put("global_team_members", JSON.stringify(teamList));
+            }
+        }
+    } catch (err) {
+        console.error("Ошибка автопополнения базы игроков:", err);
+    }
 }
 
 // --- Функция автоматического напоминания в 10:00 ---
@@ -835,5 +945,118 @@ async function checkLiveResults(targetChatId, env) {
         }
     } catch (error) {
         console.error("Ошибка в функции checkLiveResults:", error.message);
+    }
+}
+
+// --- ФУНКЦИЯ ВЫВОДА МЕНЮ ВЫБОРА ОПРОСА ДЛЯ ПИНГА ---
+async function pingTeam(targetChatId, env) {
+    if (!env.QUIZ_DB) return;
+
+    try {
+        const cachedTeam = await env.QUIZ_DB.get("global_team_members");
+        if (!cachedTeam) {
+            await sendTelegramMessage(targetChatId, "ℹ️ <b>Пинг пока невозможен:</b> В базе данных еще нет сохраненных игроков.", env);
+            return;
+        }
+
+        // Вытаскиваем из базы список всех когда-либо созданных опросов
+        const list = await env.QUIZ_DB.list({ prefix: "poll:" });
+        if (!list.keys || list.keys.length === 0) {
+            await sendTelegramMessage(targetChatId, "⚠️ <b>Пинг отменен:</b> В чате пока нет запущенных опросов на игры.", env);
+            return;
+        }
+
+        let inlineKeyboard = [];
+
+        // Перебираем все опросы из базы
+        for (const keyObj of list.keys) {
+            const pollData = await env.QUIZ_DB.get(keyObj.name);
+            if (!pollData) continue;
+
+            const game = JSON.parse(pollData);
+            const pollId = keyObj.name.replace("poll:", "");
+
+            // Название кнопки (Дата игры + Имя игры)
+            const buttonText = `${game.date} — ${game.title}`;
+
+            // Зашиваем ID опроса в префикс png:
+            inlineKeyboard.push([
+                {
+                    text: buttonText,
+                    callback_data: `png:${pollId}`
+                }
+            ]);
+        }
+
+        // Отправляем меню выбора в чат
+        await fetch(tgUrl(env, "sendMessage"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: targetChatId,
+                text: "🔔 <b>Выбор опроса для пинга прогульщиков</b>\n\nВ чате найдено несколько активных сборов. Выберите нужную игру, чтобы тегнуть молчунов именно по ней: 👇",
+                parse_mode: "HTML",
+                reply_markup: { inline_keyboard: inlineKeyboard }
+            })
+        });
+
+    } catch (error) {
+        console.error("Ошибка вывода меню пинга:", error);
+    }
+}
+
+// --- ФУНКЦИЯ ВЫПОЛНЕНИЯ ТОЧЕЧНОГО ПИНГА ПО ВЫБРАННОЙ ИГРЕ ---
+async function executeLivePing(chatId, messageId, pollId, callbackQueryId, env) {
+    try {
+        // 1. Гасим часики анимации кнопки в Telegram
+        await fetch(tgUrl(env, "answerCallbackQuery"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ callback_query_id: callbackQueryId })
+        });
+
+        const cachedTeam = await env.QUIZ_DB.get("global_team_members");
+        const allTeamMembers = JSON.parse(cachedTeam || "[]");
+
+        // 2. Читаем из базы данные именно выбранного опроса
+        const pollData = await env.QUIZ_DB.get(`poll:${pollId}`);
+        if (!pollData) return;
+
+        const game = JSON.parse(pollData);
+        const currentVoters = game.voters || {};
+
+        // 3. Вычисляем прогульщиков конкретно для этой игры
+        let silentPlayers = [];
+        allTeamMembers.forEach(player => {
+            if (!currentVoters[player.id]) {
+                if (player.username) {
+                    silentPlayers.push(`@${player.username}`);
+                } else {
+                    silentPlayers.push(`<b>${player.name}</b>`);
+                }
+            }
+        });
+
+        // 4. Удаляем меню выбора кнопок из чата
+        await fetch(tgUrl(env, "deleteMessage"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+        });
+
+        // 5. Публикуем пинг-сообщение
+        if (silentPlayers.length > 0) {
+            let pingText = `🍩 <b>Пончики, просыпаемся!</b> 🍩\n\n`;
+            pingText += `Напоминаем про сбор на квиз «<b>${game.title}</b>» (${game.date} в ${game.time}). Вы ещё не отметились в опросе:\n\n`;
+            pingText += `${silentPlayers.join(", ")}\n\n`;
+            pingText += `👇 <i>Пожалуйста, проголосуйте в активном опросе выше!</i>`;
+            
+            await sendTelegramMessage(chatId, pingText, env);
+        } else {
+            await sendTelegramMessage(chatId, `✅ <b>Полный сбор на игру «${game.title}»!</b> Все участники команды уже проголосовали. Прогульщиков нет! 🥰`, env);
+        }
+
+    } catch (error) {
+        console.error("Ошибка выполнения точечного пинга:", error);
     }
 }
