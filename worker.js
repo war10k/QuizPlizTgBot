@@ -394,7 +394,7 @@ async function handleCallbackQuery(callbackQuery, env) {
         const dateInfo = `${gameDate} (${dayOfWeekString}) в ${gameTime}`;
         const pollQuestion = `Кто идет на Квиз?\n\n📝 ${title}\n📅 ${dateInfo}\n📍 ${placeTitle}`;
 
-        const pollResponse = await fetch(`https://api.telegram.org/bot{env.BOT_TOKEN}/sendPoll`, {
+        const pollResponse = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendPoll`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
