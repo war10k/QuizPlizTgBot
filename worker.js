@@ -199,11 +199,20 @@ async function handlePollCommand(chatId, originalMessage, env) {
 
     const sourceText = replyToMessage.text;
     
-    const idMatch = sourceText.match(/href="https:\/\/.*?\.quizplease\.ru\/game\/([a-zA-Z0-9-]+)"/);
-    const gameId = idMatch ? idMatch[1] : "";
+    let gameId = "";
+    const entities = replyToMessage.entities || [];
+    
+    // Ищем среди сущностей скрытую текстовую ссылку (text_link)
+    const linkEntity = entities.find(e => e.type === "text_link" && e.url && e.url.includes("/game/"));
+    
+    if (linkEntity) {
+        // Вытаскиваем ID игры из URL ссылки с помощью регулярного выражения
+        const idMatch = linkEntity.url.match(/\/game\/([a-zA-Z0-9-]+)/);
+        gameId = idMatch ? idMatch[1] : "";
+    }
 
-     // Новые точные регулярные выражения для разбора отдельного сообщения игры
-    const titleMatch = sourceText.match(/🎯\s*<a .*?><b>(.*?)<\/b><\/a>/);
+    // 2. ИСПРАВЛЕНО: Так как в text приходит чистый текст, регулярки для названия и места становятся очень простыми
+    const titleMatch = sourceText.match(/🎯\s*(.*)\n🗓/);
     const dateMatch = sourceText.match(/🗓\s*Когда:\s*(.*)\n📍/);
     const placeMatch = sourceText.match(/📍\s*Где:\s*(.*)/);
 
