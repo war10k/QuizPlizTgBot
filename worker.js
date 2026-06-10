@@ -15,6 +15,10 @@ function getScheduleApi(env) {
     return `https://api.quizplease.ru/api/games/schedule/${env.CITY_ID}?order=date&meta[]=places_ids&meta[]=dates&statuses[]=0&statuses[]=1&statuses[]=2&statuses[]=3&statuses[]=5`;
 }
 
+function tgUrl(env, method) {
+    return `https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`;
+}
+
 const DAYS_OF_WEEK = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 
 export default {
@@ -192,90 +196,7 @@ async function sendNextGamesList(targetChatId, env) {
     } catch (error) {
         await sendTelegramMessage(targetChatId, "❌ Произошла ошибка при загрузке афиши.", env);
     }
-
 }
-
-// --- Функция создания опроса командой /poll ---
-// async function handlePollCommand(chatId, originalMessage, env) {
-//     // Проверяем, сделан ли /poll как ответ (reply) на сообщение бота
-//     const replyToMessage = originalMessage.reply_to_message;
-    
-//     if (!replyToMessage || !replyToMessage.text) {
-//         await sendTelegramMessage(chatId, "⚠️ Ответьте командой <code>/poll</code> на сообщение с нужной игрой!", env);
-//         return;
-//     }
-
-//     const sourceText = replyToMessage.text;
-    
-//     let gameId = "";
-//     const entities = replyToMessage.entities || [];
-    
-//     // Ищем среди сущностей скрытую текстовую ссылку (text_link)
-//     const linkEntity = entities.find(e => e.type === "text_link" && e.url && e.url.includes("/game/"));
-    
-//     if (linkEntity) {
-//         // Вытаскиваем ID игры из URL ссылки с помощью регулярного выражения
-//         const idMatch = linkEntity.url.match(/\/game\/([a-zA-Z0-9-]+)/);
-//         gameId = idMatch ? idMatch[1] : "";
-//     }
-
-//     // 2. ИСПРАВЛЕНО: Так как в text приходит чистый текст, регулярки для названия и места становятся очень простыми
-//     const titleMatch = sourceText.match(/🎯\s*(.*)\n🗓/);
-//     const dateMatch = sourceText.match(/🗓\s*Когда:\s*(.*)\n📍/);
-//     const placeMatch = sourceText.match(/📍\s*Где:\s*(.*)/);
-
-//     const title = titleMatch ? titleMatch[1].trim() : "Квиз, плиз!";
-//     const dateInfo = dateMatch ? dateMatch[1].trim() : "Дата не указана";
-//     const place = placeMatch ? placeMatch[1].trim() : "Место не указано";
-
-//     // Безопасно разделяем дату и время
-//     const gameDateOnly = sourceText.match(/\d{2}\.\d{2}\.\d{4}/)?.[0] || "09.06.2026";
-//     const gameTimeOnly = sourceText.match(/\d{2}:\d{2}/)?.[0] || "19:30";
-
-//     // Собираем лаконичный вопрос для опроса (Telegram ограничивает длину вопроса в 300 символов)
-//     const pollQuestion = `Кто идет на Квиз?\n\n📝 ${title}\n📅 ${dateInfo}\n📍 ${place}`;
-
-//     // Отправляем опрос (sendPoll) по правилам Telegram API
-//     const pollUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendPoll`;
-//     const response = await fetch(pollUrl, {
-//         method: "POST",
-//         headers: { "Content-Type": "application/json" },
-//         body: JSON.stringify({
-//             chat_id: chatId,
-//             question: pollQuestion,
-//             options: JSON.stringify(["Иду", "Иду + 1", "Без меня"]),
-//             is_anonymous: false,               // Не анонимный опрос (видно кто как голосовал)
-//             allows_multiple_answers: false,    // Выбрать можно только один вариант
-//             type: "regular"                    // Обычный тип голосования (не викторина)
-//         })
-//     });
-//     console.log(`текст: ${sourceText}`);
-
-//     if (response.status === 200) {
-//         const resJson = await response.json();
-//         const pollId = resJson.result?.poll?.id; // Уникальный ID опроса Telegram
-
-//         if (pollId && env.QUIZ_DB) {
-//             // Сохраняем структуру игры в базу данных KV, привязывая её к ID опроса
-//             const gameObject = {
-//                 gameId: gameId, // СВЕРХВАЖНО: Теперь ID игры надежно сохранен в базу опроса
-//                 title: title,
-//                 date: gameDateOnly,
-//                 time: gameTimeOnly,
-//                 place: place,
-//                 voters: {}, // Сюда будем записывать имена проголосовавших
-//                 resultsChecked: false // Флаг, чтобы бот знал, что результаты этой игры еще не выводились
-//             };
-//             await env.QUIZ_DB.put(`poll:${pollId}`, JSON.stringify(gameObject));
-//             await env.QUIZ_DB.put(`date:${gameDateOnly}`, pollId); // Индекс для быстрого поиска по дате
-
-//             // Запоминаем ID игры отдельно для периодической проверки результатов
-//             if (gameId) {
-//                 await env.QUIZ_DB.put(`active_game:${gameId}`, JSON.stringify({ pollId: pollId, date: gameDateOnly, time: gameTimeOnly }));
-//             }
-//         }
-//     }
-// }
 
 // --- ФУНКЦИЯ ВЫВОДА МЕНЮ ИГР ДЛЯ СОЗДАНИЯ ОПРОСА ---
 async function sendPollMenu(targetChatId, env) {
@@ -318,8 +239,7 @@ async function sendPollMenu(targetChatId, env) {
             ]);
         });
 
-        const telegramUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`;
-        await fetch(telegramUrl, {
+        await fetch(tgUrl(env, "sendMessage"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -349,7 +269,7 @@ async function handleCallbackQuery(callbackQuery, env) {
 
     try {
         // Гасим анимацию часиков на кнопке Telegram
-        await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/answerCallbackQuery`, {
+        await fetch(tgUrl(env, "answerCallbackQuery"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ callback_query_id: callbackQuery.id })
@@ -384,7 +304,7 @@ async function handleCallbackQuery(callbackQuery, env) {
         }
 
         // Удаляем старое меню с кнопками, чтобы оно не висело в чате
-        await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/deleteMessage`, {
+        await fetch(tgUrl(env, "deleteMessage"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chat_id: chatId, message_id: messageId })
@@ -394,7 +314,7 @@ async function handleCallbackQuery(callbackQuery, env) {
         const dateInfo = `${gameDate} (${dayOfWeekString}) в ${gameTime}`;
         const pollQuestion = `Кто идет на Квиз?\n\n📝 ${title}\n📅 ${dateInfo}\n📍 ${placeTitle}`;
 
-        const pollResponse = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendPoll`, {
+        const pollResponse = await fetch(tgUrl(env, "sendPoll"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -550,9 +470,8 @@ function formatDate(dateObj) {
 
 // --- Вспомогательная функция отправки сообщения в Telegram ---
 async function sendTelegramMessage(chatId, text, env) {
-    const telegramUrl = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`;
     try {
-        await fetch(telegramUrl, {
+        await fetch(tgUrl(env, "sendMessage"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -561,9 +480,7 @@ async function sendTelegramMessage(chatId, text, env) {
                 parse_mode: "HTML"
             })
         });
-    } catch (err) {
-        console.error("Ошибка отправки в Telegram:", err);
-    }
+    } catch (err) { console.error("Ошибка отправки в Telegram:", err); }
 }
 
 async function forceTestReminder(targetChatId, env) {
@@ -890,7 +807,7 @@ async function checkLiveResults(targetChatId, env) {
                             formData.append("photo", imageBlob, "result_table.png");
                             formData.append("caption", `📊 Таблица результатов: ${gameTitle}`);
 
-                            await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`, {
+                            await fetch(tgUrl(env, "sendPhoto"), {
                                 method: "POST",
                                 body: formData
                             });
