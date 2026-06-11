@@ -25,3 +25,5 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           # +++ ПРОПИСЫВАЕМ СВЯЗКУ С ГИТХАБОМ ДЛЯ CHAT_ID +++
           CHAT_ID: ${{ secrets.CHAT_ID }}
+          # +++ РАЗРЕШАЕМ ИСПОЛЬЗОВАНИЕ РАЗДЕЛЯЕМОГО МОДУЛЯ AI +++
+          WRANGLER_SEND_METRICS: "false"

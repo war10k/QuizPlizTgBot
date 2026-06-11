@@ -1063,7 +1063,7 @@ async function executeLivePing(chatId, messageId, pollId, callbackQueryId, env) 
     }
 }
 
-async function translateText(text) {
+async function translateText(text, env) {
     if (!env || !env.AI) {
         console.log("⚠️ Workers AI не подключен в env, возвращаю оригинал.");
         return text;
@@ -1104,16 +1104,14 @@ async function sendTriviaQuiz(targetChatId, env) {
         if (!questionData) return;
 
         // Переводим категорию, текст вопроса и правильный ответ на русский язык
-        const categoryRu = await translateText(questionData.category);
-        const questionRu = await translateText(questionData.question);
-        const correctAnswerRu = await translateText(questionData.correct_answer);
+        const categoryRu = await translateText(questionData.category, env);
+        const questionRu = await translateText(questionData.question, env);
+        const correctAnswerRu = await translateText(questionData.correct_answer, env);
         
-        // Переводим и собираем три неправильных варианта ответа
         let answersOptions = [];
         for (const ans of questionData.incorrect_answers) {
-            answersOptions.push(await translateText(ans));
+            answersOptions.push(await translateText(ans, env));
         }
-        // Добавляем правильный ответ в общий пул вариантов
         answersOptions.push(correctAnswerRu);
 
         // Перемешиваем варианты ответов случайным образом (алгоритм Фишера-Йетса)
