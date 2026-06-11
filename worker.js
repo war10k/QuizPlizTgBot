@@ -1070,7 +1070,7 @@ async function translateText(text) {
         if (res.status === 200) {
             const json = await res.json();
             // Склеиваем и очищаем переведенный текст от HTML-экранирования
-            return json.map(item => item).join("")
+            return json.map(item => item[0]).join("")
                 .replace(/&quot;/g, '"')
                 .replace(/&#039;/g, "'")
                 .replace(/&amp;/g, '&');

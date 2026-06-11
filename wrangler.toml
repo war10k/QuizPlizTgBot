@@ -26,3 +26,6 @@ id = "0fcb6aac8a3b4cdd894fd97e7428fe1f"
 TEAM_NAME = "Там пончики к чаю" # Название вашей команды
 CITY_SLUG = "nvkz"              # Префикс города для API рейтингов
 CITY_ID = "93"                  # Числовой ID города для API расписания
+
+[AI]
+binding = "AI"
