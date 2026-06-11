@@ -1065,16 +1065,23 @@ async function executeLivePing(chatId, messageId, pollId, callbackQueryId, env) 
 
 async function translateText(text) {
     try {
-        const url = `https://googleapis.com{encodeURIComponent(text)}`;
-        const res = await fetch(url);
-        if (res.status === 200) {
-            const json = await res.json();
-            // Склеиваем и очищаем переведенный текст от HTML-экранирования
-            return json.map(item => item[0]).join("")
-                .replace(/&quot;/g, '"')
-                .replace(/&#039;/g, "'")
-                .replace(/&amp;/g, '&');
+        const inputs = {
+            text: text,
+            source_lang: "en",
+            target_lang: "ru",
         }
+        
+        // const url = `https://googleapis.com{encodeURIComponent(text)}`;
+        const res = await env.AI.run('@cf/meta/m2m100-1.2b', inputs);//fetch(url);
+        // if (res.status === 200) {
+        //     const json = await res.json();
+        //     // Склеиваем и очищаем переведенный текст от HTML-экранирования
+        //     return json.map(item => item[0]).join("")
+        //         .replace(/&quot;/g, '"')
+        //         .replace(/&#039;/g, "'")
+        //         .replace(/&amp;/g, '&');
+        // }
+        return res.translated_text;
     } catch (e) { 
         console.error("Ошибка автопереводчика Google:", e); 
     }
