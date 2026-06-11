@@ -66,6 +66,8 @@ export default {
                     }
 
                     if (text.startsWith("/ping")) ctx.waitUntil(pingTeam(chatId, env));
+
+                    if (text.startsWith("/quiz")) ctx.waitUntil(sendTriviaQuiz(chatId, env));
                 }
             } catch (e) {
                 console.error("Ошибка обработки:", e);
@@ -1058,5 +1060,84 @@ async function executeLivePing(chatId, messageId, pollId, callbackQueryId, env) 
 
     } catch (error) {
         console.error("Ошибка выполнения точечного пинга:", error);
+    }
+}
+
+async function translateText(text) {
+    try {
+        const url = `https://googleapis.com{encodeURIComponent(text)}`;
+        const res = await fetch(url);
+        if (res.status === 200) {
+            const json = await res.json();
+            // Склеиваем и очищаем переведенный текст от HTML-экранирования
+            return json.map(item => item).join("")
+                .replace(/&quot;/g, '"')
+                .replace(/&#039;/g, "'")
+                .replace(/&amp;/g, '&');
+        }
+    } catch (e) { 
+        console.error("Ошибка автопереводчика Google:", e); 
+    }
+    return text; // Если перевод по какой-то причине дал сбой, возвращаем английский оригинал
+}
+
+// --- ФУНКЦИЯ ОТПРАВКИ НА ТИВНОЙ ВИКТОРИНЫ TELEGRAM (/quiz) ---
+async function sendTriviaQuiz(targetChatId, env) {
+    try {
+        // Запрашиваем 1 случайный вопрос с 4 вариантами ответов из базы Open Trivia DB
+        const response = await fetch("https://opentdb.com/api.php?amount=1");
+        if (response.status !== 200) {
+            await sendTelegramMessage(targetChatId, "❌ Не удалось загрузить вопрос из базы знаний. Попробуйте еще раз!", env);
+            return;
+        }
+
+        const json_data = await response.json();
+        const questionData = json_data.results?.[0];
+        if (!questionData) return;
+
+        // Переводим категорию, текст вопроса и правильный ответ на русский язык
+        const categoryRu = await translateText(questionData.category);
+        const questionRu = await translateText(questionData.question);
+        const correctAnswerRu = await translateText(questionData.correct_answer);
+        
+        // Переводим и собираем три неправильных варианта ответа
+        let answersOptions = [];
+        for (const ans of questionData.incorrect_answers) {
+            answersOptions.push(await translateText(ans));
+        }
+        // Добавляем правильный ответ в общий пул вариантов
+        answersOptions.push(correctAnswerRu);
+
+        // Перемешиваем варианты ответов случайным образом (алгоритм Фишера-Йетса)
+        for (let i = answersOptions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [answersOptions[i], answersOptions[j]] = [answersOptions[j], answersOptions[i]];
+        }
+
+        // Вычисляем индекс, под которым в перемешанном массиве оказался правильный ответ
+        const correctOptionIndex = answersOptions.indexOf(correctAnswerRu);
+
+        // Формируем текст вопроса (лимит Telegram Bot API на длину поля question — 300 символов)
+        const pollQuestion = `🎲 [Разминка] Категория: ${categoryRu}\n\n${questionRu}`;
+        const finalQuestion = pollQuestion.substring(0, 299); // Защита от обрезания строки
+
+        // Отправляем официальный Quiz-опрос через нашу общую константу tgUrl
+        await fetch(tgUrl(env, "sendPoll"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: targetChatId,
+                question: finalQuestion,
+                options: JSON.stringify(answersOptions),
+                is_anonymous: false,              // Открытый опрос, чтобы видеть успехи каждого пончика
+                type: "quiz",                     // Включаем режим нативной викторины
+                correct_option_id: correctOptionIndex, // Передаем ID правильного ответа для анимации
+                explanation: `Правильный ответ: ${correctAnswerRu}` // Подсказка, которая всплывет при ошибке
+            })
+        });
+
+    } catch (error) {
+        console.error("Критическая ошибка модуля викторин:", error);
+        await sendTelegramMessage(targetChatId, "❌ Произошла ошибка при сборке викторины разминки.", env);
     }
 }
