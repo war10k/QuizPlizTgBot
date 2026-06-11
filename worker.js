@@ -1064,26 +1064,27 @@ async function executeLivePing(chatId, messageId, pollId, callbackQueryId, env) 
 }
 
 async function translateText(text) {
+    if (!env || !env.AI) {
+        console.log("⚠️ Workers AI не подключен в env, возвращаю оригинал.");
+        return text;
+    }
+
     try {
-        const inputs = {
+        // Запускаем встроенную модель перевода Cloudflare Workers AI
+        const aiResponse = await env.AI.run("@cf/meta/m2m100-1.2b", {
             text: text,
-            source_lang: "en",
-            target_lang: "ru",
+            source_lang: "english", // Язык оригинала в базе Open Trivia DB
+            target_lang: "russian"  // Язык перевода для нашей команды
+        });
+
+        if (aiResponse && aiResponse.translated_text) {
+            return aiResponse.translated_text
+                .replace(/&quot;/g, '"')
+                .replace(/&#039;/g, "'")
+                .replace(/&amp;/g, '&');
         }
-        
-        // const url = `https://googleapis.com{encodeURIComponent(text)}`;
-        const res = await env.AI.run('@cf/meta/m2m100-1.2b', inputs);//fetch(url);
-        // if (res.status === 200) {
-        //     const json = await res.json();
-        //     // Склеиваем и очищаем переведенный текст от HTML-экранирования
-        //     return json.map(item => item[0]).join("")
-        //         .replace(/&quot;/g, '"')
-        //         .replace(/&#039;/g, "'")
-        //         .replace(/&amp;/g, '&');
-        // }
-        return res.translated_text;
-    } catch (e) { 
-        console.error("Ошибка автопереводчика Google:", e); 
+    } catch (e) {
+        console.error("Ошибка Workers AI при переводе:", e);
     }
     return text; // Если перевод по какой-то причине дал сбой, возвращаем английский оригинал
 }
