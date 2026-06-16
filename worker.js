@@ -32,7 +32,7 @@ export default {
             if (payload.poll_answer) {
                 ctx.waitUntil(handlePollAnswer(payload.poll_answer, env));
             } else if (payload.callback_query) {
-                ctx.waitUntil(handleCallbackQuery(payload.callback_query, env));
+                ctx.waitUntil(handleCallbackQuery(payload.callback_query, env, ctx));
             } else if (payload.message && payload.message.text) {
                 ctx.waitUntil(handleCommands(payload.message, env));
             }
@@ -64,10 +64,10 @@ async function handleCommands(msg, env) {
     }
 
     if (text.startsWith("/testresults")) {
-        checkLiveResults(chatId, env));
+        checkLiveResults(chatId, env);
     }
     if (text.startsWith("/quiz")) {
-        sendTriviaQuiz(chatId, env));
+        sendTriviaQuiz(chatId, env);
     }
 }
 
@@ -265,7 +265,7 @@ async function sendPollMenu(targetChatId, env) {
 }
 
 // --- ФУНКЦИЯ ОБРАБОТКИ КЛИКА ПО КНОПКЕ ИГРЫ ---
-async function handleCallbackQuery(callbackQuery, env) {
+async function handleCallbackQuery(callbackQuery, env, ctx) {
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const data = callbackQuery.data || "";
