@@ -90,6 +90,7 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
+          WRANGLER_SEND_METRICS: "false"
 ```
 
 ### Шаг 5. Активация расширенного вебхука в Telegram (Обязательно!)

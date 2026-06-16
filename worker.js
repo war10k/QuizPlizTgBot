@@ -83,6 +83,7 @@ async function runDailyCronTasks(env, event) {
     
     const now = new Date();
     const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
+    const currentDay = localTime.getDate(); // Какое сегодня число (1-31)
     const currentHour = localTime.getHours();
 
     // 1. Напоминания об играх отправляем строго один раз в день в 10:00 утра
@@ -97,6 +98,10 @@ async function runDailyCronTasks(env, event) {
 
     // +++ 3. А вот проверку результатов игр запускаем КАЖДЫЙ раз при срабатывании крона +++
     await checkLiveResults(env.CHAT_ID, env);
+
+    if (currentDay === 1 && currentHour === 0) {
+        await updateTodoMessage(env);
+    }
 }
 
 // Функция сбора данных из 4 API Квизплиз и отправки в Telegram
@@ -385,6 +390,9 @@ async function handleCallbackQuery(callbackQuery, env) {
                 await env.QUIZ_DB.put(`active_game:${gameId}`, JSON.stringify({ pollId: pollId, date: gameDate, time: gameTime }));
             }
         }
+
+        // Добавляем игры в  список задач
+        await addGameToTodo(gameId, title, gameDate, env);
 
     } catch (error) {
         console.error("Ошибка кнопки:", error);
@@ -939,6 +947,22 @@ async function checkLiveResults(targetChatId, env) {
                             });
                         }
                     }
+
+                    let todoData = await env.QUIZ_DB.get("todo_list", "json");
+                    if (todoData && todoData.games.length > 0) {
+                        // Ищем нашу игру в общем списке задач
+                        const todoGameIndex = todoData.games.findIndex(g => g.id === checkedGameId);
+                        
+                        if (todoGameIndex !== -1 && todoData.games[todoGameIndex].status !== "done") {
+                            // Переводим статус в "Выполнено"
+                            todoData.games[todoGameIndex].status = "done";
+                            
+                            // Сохраняем изменения и тихо обновляем закрепленный список
+                            await env.QUIZ_DB.put("todo_list", JSON.stringify(todoData));
+                            await updateTodoMessage(env);
+                            console.log(`Игра #${checkedGameId} автоматически отмечена как выполненная в To-Do.`);
+                        }
+                    }
                 }
                     
                 // ОЧЕНЬ ВАЖНО: Удаляем игру из базы активного отслеживания, чтобы исключить дублирование сообщений!
@@ -1145,5 +1169,199 @@ async function sendTriviaQuiz(targetChatId, env) {
     } catch (error) {
         console.error("Критическая ошибка модуля викторин:", error);
         await sendTelegramMessage(targetChatId, "❌ Произошла ошибка при сборке викторины разминки.", env);
+    }
+}
+
+// --- МОДУЛЬ СПИСКА ЗАДАЧ (TO-DO) ---
+
+// Вспомогательная функция для определения дня недели по строке даты (ДД.ММ.ГГГГ)
+function getRussianDayOfWeek(dateStr) {
+    if (!dateStr) return "Воскресенье"; // Заглушка на случай ошибки
+    // Если дата приходит в формате "18.06.2026"
+    const parts = dateStr.split('.');
+    if (parts.length === 3) {
+        const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        const days = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+        return days[date.getDay()];
+    }
+    return "День игры"; // Если формат строки нестандартный
+}
+
+// Формирование текста и тихое обновление (или создание) закрепленного сообщения
+async function updateTodoMessage(env) {
+
+    const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
+    const year = localTime.getFullYear();
+    const month = String(localTime.getMonth() + 1).padStart(2, '0');
+    const currentMonthKey = `${year}-${month}`; // Формат "2026-06"
+
+    const monthsRu = [
+        "ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ",
+        "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ"
+    ];
+    const monthName = monthsRu[localTime.getMonth()];
+
+    // Получаем текущие задачи из базы
+    let todoData = await env.QUIZ_DB.get("todo_list", "json");
+    if (!todoData) {
+        todoData = { pinned_message_id: null, current_month: currentMonthKey, games: [] };
+    }
+
+    // Ротация: если месяц сменился, сбрасываем старый айди закрепа
+    if (todoData.current_month !== currentMonthKey) {
+        todoData.pinned_message_id = null;
+        todoData.current_month = currentMonthKey;
+        // Оставляем только те игры, которые запланированы на новый месяц или позже
+        todoData.games = todoData.games.filter(g => {
+            const gParts = g.raw_date.split('.');
+            if (gParts.length === 3) {
+                return `${gParts[2]}-${gParts[1]}` >= currentMonthKey;
+            }
+            return true;
+        });
+    }
+
+    // Собираем текст списка задач
+    let messageText = `📌 *СПИСОК ЗАДАЧ НА ${monthName} ${year}*\n\n`;
+    
+    if (todoData.games.length === 0) {
+        messageText += "⏳ Задач пока нет. Запустите /poll для добавления игры!";
+    } else {
+        // Сортируем игры по дате (от старых к новым)
+        todoData.games.sort((a, b) => {
+            const aArr = a.raw_date.split('.').reverse().join('');
+            const bArr = b.raw_date.split('.').reverse().join('');
+            return aArr.localeCompare(bArr);
+        });
+
+        todoData.games.forEach((game, index) => {
+            let statusEmoji = "⏳";
+            let statusText = "Опрос активен";
+            
+            if (game.status === "done") {
+                statusEmoji = "✅";
+                statusText = "Сыграно!";
+            } else if (game.status === "canceled") {
+                statusEmoji = "❌";
+                statusText = "Отменено";
+            }
+
+            messageText += `${statusEmoji} ${index + 1}. *${game.day_of_week}*, ${game.date_str}: #${game.id} [${game.title}] — _${statusText}_\n`;
+        });
+    }
+
+    messageText += `\n_🔄 Обновлено автоматически в ${String(localTime.getHours()).padStart(2, '0')}:${String(localTime.getMinutes()).padStart(2, '0')}_`;
+
+    // Отправка или редактирование в Telegram
+    const chatId = env.CHAT_ID;
+    
+    if (todoData.pinned_message_id) {
+        // Если сообщение уже висит — тихо обновляем его текст через editMessageText
+        try {
+            await fetch(tgUrl(env, "editMessageText"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    message_id: todoData.pinned_message_id,
+                    text: messageText,
+                    parse_mode: "Markdown"
+                })
+            });
+        } catch (e) {
+            console.error("Ошибка обновления закрепленного сообщения:", e);
+            todoData.pinned_message_id = null; // Если сообщение удалили, заставим пересоздать
+        }
+    }
+
+    if (!todoData.pinned_message_id) {
+        // Если закрепа еще нет — публикуем новое сообщение
+        try {
+            const sendRes = await fetch(tgUrl(env, "sendMessage"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: messageText,
+                    parse_mode: "Markdown"
+                })
+            });
+            const sendData = await sendRes.json();
+            
+            if (sendData.ok) {
+                todoData.pinned_message_id = sendData.result.message_id;
+                
+                // Сразу же закрепляем его в чате
+                await fetch(tgUrl(env, "pinChatMessage"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        message_id: todoData.pinned_message_id,
+                        disable_notification: true
+                    })
+                });
+            }
+        } catch (e) {
+            console.error("Ошибка публикации или закрепа сообщения:", e);
+        }
+    }
+
+    // Сохраняем обновленную структуру данных обратно в KV
+    await env.QUIZ_DB.put("todo_list", JSON.stringify(todoData));
+}
+
+function parseGameDate(rawDate) {
+    // Дефолтные значения на случай сбоя
+    let dayOfWeek = "День игры";
+    let dateStr = rawDate;
+
+    if (!rawDate) return { dayOfWeek, dateStr };
+
+    const parts = rawDate.split('.'); // Разбиваем "18.06.2026"
+    if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const monthIdx = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+
+        const date = new Date(year, monthIdx, day);
+        
+        const months = [
+            "января", "февраля", "марта", "апреля", "мая", "июня",
+            "июля", "августа", "сентября", "октября", "ноября", "декабря"
+        ];
+
+        dayOfWeek = DAYS_OF_WEEK[date.getDay()];
+        dateStr = `${day} ${months[monthIdx]}`; // На выходе: "18 июня"
+    }
+
+    return { dayOfWeek, dateStr };
+}
+
+// Автоматическое добавление игры в To-Do при вызове /poll
+async function addGameToTodo(gameId, gameTitle, rawDate, env) {
+    let todoData = await env.QUIZ_DB.get("todo_list", "json");
+    if (!todoData) {
+        const tzOffset = 7 * 60 * 60 * 1000;
+        const localTime = new Date(Date.now() + tzOffset);
+        const currentMonthKey = `${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}`;
+        todoData = { pinned_message_id: null, current_month: currentMonthKey, games: [] };
+    }
+
+    if (!todoData.games.some(g => g.id === gameId)) {
+        // Вызываем наш новый парсер даты
+        const { dayOfWeek, dateStr } = parseGameDate(rawDate);
+        
+        todoData.games.push({
+            id: gameId,
+            title: gameTitle,
+            raw_date: rawDate,   // "18.06.2026"
+            date_str: dateStr,   // "18 июня"
+            day_of_week: dayOfWeek,
+            status: "pending"
+        });
+
+        await env.QUIZ_DB.put("todo_list", JSON.stringify(todoData));
+        await updateTodoMessage(env);
     }
 }
