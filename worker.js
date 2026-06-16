@@ -1,7 +1,7 @@
 // --- Динамическая сборка ссылок под любой город ---
 function getApiEndpoints(env) {
 
-    let URLS = `https://rating-api.quizplease.ru/api/external/team?city=${env.CITY_SLUG}`;
+    const URLS = `https://rating-api.quizplease.ru/api/external/team?city=${env.CITY_SLUG}`;
 
     return {
         "🏆 Сезонный рейтинг (Кино и музыка)": `${URLS}&rating=2&bySeason=true`,
@@ -32,7 +32,7 @@ export default {
             if (payload.poll_answer) {
                 ctx.waitUntil(handlePollAnswer(payload.poll_answer, env));
             } else if (payload.callback_query) {
-                ctx.waitUntil(handleCallbackQuery(payload.callback_query, env, ctx));
+                ctx.waitUntil(handleCallbackQuery(payload.callback_query, env));
             } else if (payload.message && payload.message.text) {
                 ctx.waitUntil(handleCommands(payload.message, env));
             }
@@ -52,22 +52,19 @@ async function handleCommands(msg, env) {
     const chatId = msg.chat.id;
 
     if (text.startsWith("/stats")) {
-        await getTeamStats(chatId, env);
+        await sendStats(chatId, env);
     } else if (text.startsWith("/nextgame")) {
-        await getNextGames(chatId, env);
+        await sendNextGamesList(chatId, env);
     } else if (text.startsWith("/poll")) {
         await showPollMenu(chatId, env);
     } else if (text.startsWith("/ping")) {
-        await showPingMenu(chatId, env);
+        await pingTeam(chatId, env);
     } else if (text.startsWith("/hof") || text.startsWith("/halloffame")) {
-        await getHallOfFame(chatId, env);
-    }
-
-    if (text.startsWith("/testresults")) {
-        checkLiveResults(chatId, env);
-    }
-    if (text.startsWith("/quiz")) {
-        sendTriviaQuiz(chatId, env);
+        await sendHallOfFame(chatId, env);
+    } else if (text.startsWith("/testresults")) {
+        await checkLiveResults(chatId, env);
+    } else if (text.startsWith("/quiz")) {
+        await sendTriviaQuiz(chatId, env);
     }
 }
 
@@ -79,12 +76,9 @@ async function runDailyCronTasks(env) {
     const currentHour = localTime.getHours();
 
     // 1. Напоминания об играх отправляем строго один раз в день в 10:00 утра
-    if (currentHour === 10) {
-        await checkAndSendReminders(env.CHAT_ID, env);
-    }
-    
     // 2. Проверяем изменения в общем рейтинге (Зал славы) тоже в 10:00
     if (currentHour === 10) {
+        await checkAndSendReminders(env.CHAT_ID, env);
         await trackRatingChanges(env.CHAT_ID, env);
     }
 
@@ -100,9 +94,7 @@ async function runDailyCronTasks(env) {
 async function sendStats(targetChatId, env) {
     let messageText = `🍩 <b>Статистика команды «${env.TEAM_NAME}»</b>\n\n`;
     
-    const headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    };
+   const headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" };
 
     for (const [label, baseUrl] of Object.entries(getApiEndpoints(env))) {
         try {
@@ -138,9 +130,7 @@ async function sendStats(targetChatId, env) {
 
 // --- Функция вывода расписания всех игр (/nextgame) ---
 async function sendNextGamesList(targetChatId, env) {
-    const headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    };
+    const headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" };
 
     try {
         const response = await fetch(getScheduleApi(env), { headers });
@@ -170,10 +160,7 @@ async function sendNextGamesList(targetChatId, env) {
 
                         const parts = gameDate.split("."); 
                         if (parts.length === 3) {
-                            const day = parseInt(parts[0], 10);
-                            const month = parseInt(parts[1], 10) - 1;
-                            const year = parseInt(parts[2], 10);
-                            const dateObj = new Date(year, month, day);
+                            const dateObj = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
                             dayOfWeekString = DAYS_OF_WEEK[dateObj.getDay()];
                         }
                     }
@@ -199,7 +186,7 @@ async function sendNextGamesList(targetChatId, env) {
 }
 
 // --- ФУНКЦИЯ ВЫВОДА МЕНЮ ИГР ДЛЯ СОЗДАНИЯ ОПРОСА ---
-async function sendPollMenu(targetChatId, env) {
+async function showPollMenu(targetChatId, env) {
     const headers = { "User-Agent": "Mozilla/5.0" };
     try {
         const response = await fetch(getScheduleApi(env), { headers });
@@ -228,15 +215,10 @@ async function sendPollMenu(targetChatId, env) {
             }
 
             // Формируем текст на кнопке (Дата + Имя игры)
-            const buttonText = `${gameDate} — ${title}`;
-            
-            // В скрытый параметр кнопки зашиваем ID игры
-            inlineKeyboard.push([
-                {
-                    text: buttonText,
-                    callback_data: `btn:${game.id}`
-                }
-            ]);
+            inlineKeyboard.push([{
+                text: `${gameDate} — ${title}`,
+                callback_data: `btn:${game.id}`
+            }]);
         });
 
         // +++ Добавляем в самый конец меню кнопку отмены +++
@@ -265,7 +247,7 @@ async function sendPollMenu(targetChatId, env) {
 }
 
 // --- ФУНКЦИЯ ОБРАБОТКИ КЛИКА ПО КНОПКЕ ИГРЫ ---
-async function handleCallbackQuery(callbackQuery, env, ctx) {
+async function handleCallbackQuery(callbackQuery, env) {
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
     const data = callbackQuery.data || "";
@@ -293,7 +275,7 @@ async function handleCallbackQuery(callbackQuery, env, ctx) {
     }
 
     if (data.startsWith("png:")) {
-        ctx.waitUntil(executeLivePing(chatId, messageId, data.replace("png:", ""), callbackQuery.id, env));
+        await executeLivePing(chatId, messageId, data.replace("png:", ""), callbackQuery.id, env);
         return;
     }
 
@@ -423,14 +405,12 @@ async function handlePollAnswer(pollAnswer, env) {
 
     await env.QUIZ_DB.put(`poll:${pollId}`, JSON.stringify(gameObject));
 
-    // +++ НОВАЯ ЛОГИКА: АВТОМАТИЧЕСКИЙ ПОДСЧЕТ ЛИМИТА СТОЛА (9 ЧЕЛОВЕК) +++
+    // КВНТРОЛЬ ЛИМИТА СТОЛА (9 ЧЕЛОВЕК)
     try {
         let totalSeats = 0;
         if (gameObject.voters) {
             for (const user of Object.values(gameObject.voters)) {
-                if (user && user.count > 0) {
-                    totalSeats += user.count; // Плюсуем места (Иду = 1, Иду + 1 = 2)
-                }
+                if (user && user.count > 0) totalSeats += user.count;
             }
         }
 
@@ -462,32 +442,19 @@ async function handlePollAnswer(pollAnswer, env) {
         console.error("Ошибка контроля лимита стола:", limitErr);
     }
 
-    // +++ ШАГ Б: АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ ГЛОБАЛЬНОГО СПИСКА КОМАНДЫ +++
+    // АВТОПОПОЛНЕНИЕ БАЗЫ ИГРОКОВ
     try {
-        const userId = pollAnswer.user.id;
-        const firstName = pollAnswer.user.first_name || "Игрок";
-        const username = pollAnswer.user.username || "";
-
         const cachedTeam = await env.QUIZ_DB.get("global_team_members");
         let teamList = cachedTeam ? JSON.parse(cachedTeam) : [];
+        const index = teamList.findIndex(member => member.id === userId);
 
-        // Проверяем, есть ли уже этот пользователь в нашей базе по его уникальному ID
-        const exists = teamList.some(member => member.id === userId);
-
-        if (!exists) {
-            // Если игрока нет, добавляем его структуру в массив
+        if (index === -1) {
             teamList.push({ id: userId, name: firstName, username: username });
-            // Сохраняем обновленный состав команды обратно в KV
             await env.QUIZ_DB.put("global_team_members", JSON.stringify(teamList));
-            console.log(`👤 В глобальный список команды успешно добавлен новый игрок: ${firstName}`);
-        } else {
-            // Если игрок уже был, но сменил ник в Telegram, точечно обновим его данные
-            const index = teamList.findIndex(member => member.id === userId);
-            if (teamList[index].username !== username || teamList[index].name !== firstName) {
-                teamList[index].name = firstName;
-                teamList[index].username = username;
-                await env.QUIZ_DB.put("global_team_members", JSON.stringify(teamList));
-            }
+        } else if (teamList[index].username !== username || teamList[index].name !== firstName) {
+            teamList[index].name = firstName;
+            teamList[index].username = username;
+            await env.QUIZ_DB.put("global_team_members", JSON.stringify(teamList));
         }
     } catch (err) {
         console.error("Ошибка автопополнения базы игроков:", err);
@@ -521,22 +488,15 @@ async function checkAndSendReminders(targetChatId, env) {
         console.log(`Результат поиска в KV -> Сегодняшний опрос: ${todayPollId}, Завтрашний опрос: ${tomorrowPollId}`);
 
         // Отправляем напоминания, если нашли ID опросов в базе
-        if (todayPollId) {
-            await processReminder(todayPollId, "СЕГОДНЯ", targetChatId, env);
-        }
-        
-        if (tomorrowPollId) {
-            await processReminder(tomorrowPollId, "ЗАВТРА", targetChatId, env);
-        }
+        if (todayPollId) await processReminder(todayPollId, "СЕГОДНЯ", targetChatId, env);
+        if (tomorrowPollId) await processReminder(tomorrowPollId, "ЗАВТРА", targetChatId, env);
 
     } catch (error) {
-        console.error("Произошел сбой внутри checkAndSendReminders:", error.message);
-        // Бот подстрахует и пришлет ошибку в чат, чтобы вы знали, на какой строке сбой
+        console.error("Сбой внутри checkAndSendReminders:", error.message);
         await sendTelegramMessage(targetChatId, `💥 Ошибка планировщика напоминаний:\n<code>${error.message}</code>`, env);
     }
 }
 
-// --- Сборка текста напоминания со списками людей ---
 async function processReminder(pollId, dayText, targetChatId, env) {
     const data = await env.QUIZ_DB.get(`poll:${pollId}`);
     if (!data) return;
@@ -593,7 +553,7 @@ async function sendTelegramMessage(chatId, text, env) {
     } catch (err) { console.error("Ошибка отправки в Telegram:", err); }
 }
 
-// --- ФУНКЦИЯ ТРЕКИНГА И ДОСТИЖЕНИЙ ---
+// --- ТРЕКИНГ И ДОСТИЖЕНИЙ ---
 async function trackRatingChanges(targetChatId, env) {
     if (!env.QUIZ_DB) return;
     const headers = { "User-Agent": "Mozilla/5.0" };
@@ -613,14 +573,13 @@ async function trackRatingChanges(targetChatId, env) {
                     const currentGames = team.games !== undefined ? team.games : 0;
                     const currentRank = team.rank?.title || "Без ранга";
 
-                    // Пытаемся достать из базы данных старые (вчерашние) результаты
                     const dbKey = `stats:${label}`;
                     const cachedData = await env.QUIZ_DB.get(dbKey);
                     
                     if (cachedData) {
                         const oldStats = JSON.parse(cachedData);
-                        const oldPoints = oldStats.points || 0;
                         const oldGames = oldStats.games || 0;
+                        const oldPoints = oldStats.points || 0;
 
                         // Если количество сыгранных игр увеличилось — вы играли!
                         if (currentGames > oldGames) {
@@ -636,21 +595,17 @@ async function trackRatingChanges(targetChatId, env) {
                             celebrationText += `├ ✨ Сумма очков: <code>${currentPoints}</code>\n`;
                             celebrationText += `├ 🎮 Всего игр: <code>${currentGames}</code>\n`;
                             celebrationText += `└ 🎖 Наш текущий ранг: <b>${currentRank}</b>\n\n`;
-                            celebrationText += `<i>🔥 Отличный результат, так держать! Вперед к новым вершинам!</i>`;
-
-                            // Отправляем праздничное уведомление в группу
+                            
                             await sendTelegramMessage(targetChatId, celebrationText, env);
                         }
                     }
 
-                    // Перезаписываем текущие актуальные данные в базу как новые «вчерашние» для следующего дня
-                    const statsToCache = {
+                    await env.QUIZ_DB.put(dbKey, JSON.stringify({
                         points: currentPoints,
                         games: currentGames,
                         rank: currentRank,
                         updatedAt: new Date().toISOString()
-                    };
-                    await env.QUIZ_DB.put(dbKey, JSON.stringify(statsToCache));
+                    }));
                 }
             }
         } catch (error) {
@@ -717,23 +672,18 @@ async function checkLiveResults(targetChatId, env) {
         for (const keyObj of list.keys) {
             const gameId = keyObj.name.replace("active_game:", "");
             
-            // Читаем сохраненные данные опроса, чтобы узнать дату и время проведения игры
-            const pollData = await env.QUIZ_DB.get(keyObj.name);
-            if (!pollData) continue;
+            // ОПТИМИЗАЦИЯ: Читаем данные из active_game один раз
+            const activeGameData = await env.QUIZ_DB.get(keyObj.name);
+            if (!activeGameData) continue;
 
-            const parsedPoll = JSON.parse(pollData);
-            // Извлекаем полные данные игры из базы опросов
-            const fullGameObj = await env.QUIZ_DB.get(`poll:${parsedPoll.pollId}`);
+            const parsedActiveGame = JSON.parse(activeGameData);
+            const fullGameObj = await env.QUIZ_DB.get(`poll:${parsedActiveGame.pollId}`);
             if (!fullGameObj) continue;
 
             const game = JSON.parse(fullGameObj);
             
             // Если дата или время не записались (старый опрос), проверяем по старинке
-            if (!game.date || !game.time) {
-                console.log(`[Check] Нет данных времени для игры ${gameId}, опрашиваю напрямую...`);
-            } else {
-                // Собираем полноценный объект даты и времени начала игры
-                // game.date: "09.06.2026", game.time: "19:30"
+            if (game.date && game.time) {
                 const dateParts = game.date.split(".");
                 const timeParts = game.time.split(":");
                 
@@ -766,9 +716,7 @@ async function checkLiveResults(targetChatId, env) {
             const json_data = await response.json();
             
             // Защита: Проверяем сообщение "Игра не найдена"
-            if (json_data.data && json_data.data.message === "Игра не найдена") {
-                continue;
-            }
+            if (json_data.data && json_data.data.message === "Игра не найдена") continue;
 
             // Проверяем, появились ли результаты на сервере (обычно ключ status: "ok" и массив не пустой)
             const resultsTable = json_data.data?.results || [];
@@ -784,16 +732,13 @@ async function checkLiveResults(targetChatId, env) {
                 );
 
                 if (ourResult) {
+
+                    await env.QUIZ_DB.delete(keyObj.name);
+
                     const position = parseInt(ourResult.place || ourResult.rank, 10) || 99;
                     const totalPoints = ourResult.total || 0;
 
-                    let gameTitle = "Прошедший Квиз, плиз!";
-                    const pollData = await env.QUIZ_DB.get(keyObj.name);
-                    if (pollData) {
-                        const parsedPoll = JSON.parse(pollData);
-                        const fullGameObj = await env.QUIZ_DB.get(`poll:${parsedPoll.pollId}`);
-                        if (fullGameObj) gameTitle = JSON.parse(fullGameObj).title || gameTitle;
-                    }
+                    const gameTitle = game.title || "Прошедший Квиз, плиз!";
                     
                     let celebrationText = "";
                     if (position === 1) {
@@ -814,7 +759,7 @@ async function checkLiveResults(targetChatId, env) {
                     let text = `🏆 <b>РЕЗУЛЬТАТЫ ИГРЫ ОПУБЛИКОВАНЫ!</b> 🏆\n\n`;
                     text += `${celebrationText}\n\n`;
                     text += `🎯 <b>Игра:</b> ${gameTitle}\n`;
-                    text += `🎖 <b>Занятое место: ${position} место\n`;
+                    text += `🎖 <b>Занятое место:</b> ${position} место\n`;
                     text += `✨ <b>Всего баллов:</b> <code>${totalPoints}</code>\n\n`;
                     
                     await sendTelegramMessage(targetChatId, text, env);
@@ -840,62 +785,7 @@ async function checkLiveResults(targetChatId, env) {
                             </tr>`;
                     });
 
-                    const fullHtml = `
-                    <style>
-                        #vueLatestTable table tr td[data-v-001abdab] {
-                            padding: .3rem .625rem;
-                            text-align: center
-                        }
-                        #vueLatestTable[data-v-f164737e] {
-                            background-color: #fff;
-                            color: #333 !important;
-                            cursor: pointer;
-                            font-weight: 500;
-                            margin: 0 auto;
-                            -webkit-user-select: none;
-                            -moz-user-select: none;
-                            user-select: none;
-                            border-radius: 2px;
-                            box-shadow: 0 2px 8px #63636333;
-                        }
-                        * {
-                            box-sizing: border-box;
-                            font-family: Gilroy;
-                            font-size: 16px;
-                        }
-                        tr {
-                            display: table-row;
-                            vertical-align: inherit;
-                            unicode-bidi: isolate;
-                            border-color: inherit;
-                        }
-                        td {
-                            display: table-cell;
-                            vertical-align: inherit;
-                            unicode-bidi: isolate;
-                        }
-                        .our-team { background: #fef08a !important; font-weight: bold; }
-                    </style>
-                    <div data-v-001abdab="" data-v-f164737e="" id="vueLatestTable" class="defaultTheme">
-                        <h2 style="margin: 0 0 15px 0; font-size: 22px; font-weight: bold; padding-bottom: 12px; padding: .3rem .625rem;">${gameTitle}</h2>
-                        <table data-v-001abdab="" aria-hidden="true">
-                            <thead data-v-001abdab="">
-                                <tr data-v-001abdab="">
-                                    <th data-v-001abdab="">Место</th>
-                                    <th data-v-001abdab="">Название команды</th>
-                                    <th data-v-001abdab="">Итого</th>
-                                    <th data-v-001abdab="">1 раунд</th>
-                                    <th data-v-001abdab="">2 раунд</th>
-                                    <th data-v-001abdab="">3 раунд</th>
-                                    <th data-v-001abdab="">4 раунд</th>
-                                    <th data-v-001abdab="">5 раунд</th>
-                                    <th data-v-001abdab="">6 раунд</th>
-                                    <th data-v-001abdab="">7 раунд</th>
-                                </tr>
-                            </thead>
-                            <tbody data-v-001abdab="">${rowsHtml}</tbody>                   
-                        </table>
-                    </div>`;
+                     const fullHtml = `<style>* { font-family: sans-serif; font-size: 14px; } table { width: 100%; border-collapse: collapse; } th, td { padding: 8px; border: 1px solid #ddd; text-align: left; } .our-team { background: #fef08a; font-weight: bold; }</style><div style="padding: 20px; background: white;"><h2>${gameTitle}</h2><table><thead><tr><th>Место</th><th>Команда</th><th>Итого</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
 
                     // 3. Отправляем HTML на отрисовку в Pictify.io API
                     const renderResponse = await fetch("https://api.pictify.io/image", {
@@ -935,7 +825,7 @@ async function checkLiveResults(targetChatId, env) {
                         }
                     }
 
-                    let todoData = await env.QUIZ_DB.get("todo_list", "json");
+                    let todoData = await env.QUIZ_DB.get("todo_list", { type: "json" });
                     if (todoData && todoData.games.length > 0) {
                         // Ищем нашу игру в общем списке задач
                         const todoGameIndex = todoData.games.findIndex(g => g.id === gameId);
@@ -952,8 +842,6 @@ async function checkLiveResults(targetChatId, env) {
                     }
                 }
                     
-                // ОЧЕНЬ ВАЖНО: Удаляем игру из базы активного отслеживания, чтобы исключить дублирование сообщений!
-                await env.QUIZ_DB.delete(keyObj.name);
             }  
         }
     } catch (error) {
@@ -989,16 +877,10 @@ async function pingTeam(targetChatId, env) {
             const game = JSON.parse(pollData);
             const pollId = keyObj.name.replace("poll:", "");
 
-            // Название кнопки (Дата игры + Имя игры)
-            const buttonText = `${game.date} — ${game.title}`;
-
-            // Зашиваем ID опроса в префикс png:
-            inlineKeyboard.push([
-                {
-                    text: buttonText,
-                    callback_data: `png:${pollId}`
-                }
-            ]);
+            inlineKeyboard.push([{
+                text: `${game.date} — ${game.title}`,
+                callback_data: `png:${pollId}`
+            }]);
         }
 
         // Отправляем меню выбора в чат
@@ -1007,7 +889,7 @@ async function pingTeam(targetChatId, env) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 chat_id: targetChatId,
-                text: "🔔 <b>Выбор опроса для пинга прогульщиков</b>\n\nВ чате найдено несколько активных сборов. Выберите нужную игру, чтобы тегнуть молчунов именно по ней: 👇",
+                text: "🔔 <b>Выбор опроса для пинга прогульщиков</b>\n\nВыберите нужную игру, чтобы тегнуть молчунов: 👇",
                 parse_mode: "HTML",
                 reply_markup: { inline_keyboard: inlineKeyboard }
             })
@@ -1066,7 +948,7 @@ async function executeLivePing(chatId, messageId, pollId, callbackQueryId, env) 
             
             await sendTelegramMessage(chatId, pingText, env);
         } else {
-            await sendTelegramMessage(chatId, `✅ <b>Полный сбор на игру «${game.title}»!</b> Все участники команды уже проголосовали. Прогульщиков нет! 🥰`, env);
+            await sendTelegramMessage(chatId, `✅ <b>Полный сбор на игру «${game.title}»!</b> Прогульщиков нет! 🥰`, env);
         }
 
     } catch (error) {
@@ -1114,18 +996,16 @@ async function sendTriviaQuiz(targetChatId, env) {
         const questionData = json_data.results?.[0];
         if (!questionData) return;
 
-        // Переводим категорию, текст вопроса и правильный ответ на русский язык
-        const categoryRu = await translateText(questionData.category, env);
-        const questionRu = await translateText(questionData.question, env);
-        const correctAnswerRu = await translateText(questionData.correct_answer, env);
+        // ОПТИМИЗАЦИЯ: Параллельный перевод через Promise.all вместо последовательного цикла
+        const [categoryRu, questionRu, correctAnswerRu, ...incorrectAnswersRu] = await Promise.all([
+            translateText(questionData.category, env),
+            translateText(questionData.question, env),
+            translateText(questionData.correct_answer, env),
+            ...questionData.incorrect_answers.map(ans => translateText(ans, env))
+        ]);
         
-        let answersOptions = [];
-        for (const ans of questionData.incorrect_answers) {
-            answersOptions.push(await translateText(ans, env));
-        }
-        answersOptions.push(correctAnswerRu);
+        let answersOptions = [...incorrectAnswersRu, correctAnswerRu];
 
-        // Перемешиваем варианты ответов случайным образом (алгоритм Фишера-Йетса)
         for (let i = answersOptions.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [answersOptions[i], answersOptions[j]] = [answersOptions[j], answersOptions[i]];
@@ -1163,11 +1043,11 @@ async function sendTriviaQuiz(targetChatId, env) {
 
 // Формирование текста и тихое обновление (или создание) закрепленного сообщения
 async function updateTodoMessage(env) {
-
+    const now = new Date();
     const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
     const year = localTime.getFullYear();
     const month = String(localTime.getMonth() + 1).padStart(2, '0');
-    const currentMonthKey = `${year}-${month}`; // Формат "2026-06"
+    const currentMonthKey = `${year}-${month}`;
 
     const monthsRu = [
         "ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ",
@@ -1175,33 +1055,30 @@ async function updateTodoMessage(env) {
     ];
     const monthName = monthsRu[localTime.getMonth()];
 
-    // Получаем текущие задачи из базы
-    let todoData = await env.QUIZ_DB.get("todo_list", "json");
+    let todoData = await env.QUIZ_DB.get("todo_list", { type: "json" });
     if (!todoData) {
         todoData = { pinned_message_id: null, current_month: currentMonthKey, games: [] };
     }
 
-    // Ротация: если месяц сменился, сбрасываем старый айди закрепа
     if (todoData.current_month !== currentMonthKey) {
         todoData.pinned_message_id = null;
         todoData.current_month = currentMonthKey;
-        // Оставляем только те игры, которые запланированы на новый месяц или позже
         todoData.games = todoData.games.filter(g => {
             const gParts = g.raw_date.split('.');
             if (gParts.length === 3) {
-                return `${gParts[2]}-${gParts[1]}` >= currentMonthKey;
+                const formattedMonth = String(gParts[1]).padStart(2, '0');
+                return `${gParts[2]}-${formattedMonth}` >= currentMonthKey;
             }
             return true;
         });
     }
 
-    // Собираем текст списка задач
-    let messageText = `📌 *СПИСОК ЗАДАЧ НА ${monthName} ${year}*\n\n`;
+    // Собираем текст в безопасном HTML формате
+    let messageText = `📌 <b>СПИСОК ЗАДАЧ НА ${monthName} ${year}</b>\n\n`;
     
     if (todoData.games.length === 0) {
         messageText += "⏳ Задач пока нет. Запустите /poll для добавления игры!";
     } else {
-        // Сортируем игры по дате (от старых к новым)
         todoData.games.sort((a, b) => {
             const aArr = a.raw_date.split('.').reverse().join('');
             const bArr = b.raw_date.split('.').reverse().join('');
@@ -1220,17 +1097,18 @@ async function updateTodoMessage(env) {
                 statusText = "Отменено";
             }
 
-            messageText += `${statusEmoji} ${index + 1}. *${game.day_of_week}*, ${game.date_str}: #${game.id} [${game.title}] — _${statusText}_\n`;
+            // Экранируем символы < и > в названии игры для безопасности HTML
+            const cleanTitle = game.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+            messageText += `${statusEmoji} ${index + 1}. <b>${game.day_of_week}</b>, ${game.date_str}: #${game.id} [${cleanTitle}] — <i>${statusText}</i>\n`;
         });
     }
 
-    messageText += `\n_🔄 Обновлено автоматически в ${String(localTime.getHours()).padStart(2, '0')}:${String(localTime.getMinutes()).padStart(2, '0')}_`;
+    messageText += `\n<i>🔄 Обновлено автоматически в ${String(localTime.getHours()).padStart(2, '0')}:${String(localTime.getMinutes()).padStart(2, '0')}</i>`;
 
-    // Отправка или редактирование в Telegram
     const chatId = env.CHAT_ID;
     
     if (todoData.pinned_message_id) {
-        // Если сообщение уже висит — тихо обновляем его текст через editMessageText
         try {
             await fetch(tgUrl(env, "editMessageText"), {
                 method: "POST",
@@ -1239,17 +1117,16 @@ async function updateTodoMessage(env) {
                     chat_id: chatId,
                     message_id: todoData.pinned_message_id,
                     text: messageText,
-                    parse_mode: "Markdown"
+                    parse_mode: "HTML"
                 })
             });
         } catch (e) {
             console.error("Ошибка обновления закрепленного сообщения:", e);
-            todoData.pinned_message_id = null; // Если сообщение удалили, заставим пересоздать
+            todoData.pinned_message_id = null; 
         }
     }
 
     if (!todoData.pinned_message_id) {
-        // Если закрепа еще нет — публикуем новое сообщение
         try {
             const sendRes = await fetch(tgUrl(env, "sendMessage"), {
                 method: "POST",
@@ -1257,7 +1134,7 @@ async function updateTodoMessage(env) {
                 body: JSON.stringify({
                     chat_id: chatId,
                     text: messageText,
-                    parse_mode: "Markdown"
+                    parse_mode: "HTML"
                 })
             });
             const sendData = await sendRes.json();
@@ -1265,7 +1142,6 @@ async function updateTodoMessage(env) {
             if (sendData.ok) {
                 todoData.pinned_message_id = sendData.result.message_id;
                 
-                // Сразу же закрепляем его в чате
                 await fetch(tgUrl(env, "pinChatMessage"), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -1281,24 +1157,23 @@ async function updateTodoMessage(env) {
         }
     }
 
-    // Сохраняем обновленную структуру данных обратно в KV
     await env.QUIZ_DB.put("todo_list", JSON.stringify(todoData));
 }
 
 function parseGameDate(rawDate) {
-    // Дефолтные значения на случай сбоя
     let dayOfWeek = "День игры";
     let dateStr = rawDate;
 
     if (!rawDate) return { dayOfWeek, dateStr };
 
-    const parts = rawDate.split('.'); // Разбиваем "18.06.2026"
+    const parts = rawDate.split('.'); // "18.06.2026"
     if (parts.length === 3) {
         const day = parseInt(parts[0], 10);
         const monthIdx = parseInt(parts[1], 10) - 1;
         const year = parseInt(parts[2], 10);
 
-        const date = new Date(year, monthIdx, day);
+        // Создаем дату с явным смещением, чтобы избежать сдвига дня недели из-за UTC
+        const date = new Date(year, monthIdx, day, 12, 0, 0); 
         
         const months = [
             "января", "февраля", "марта", "апреля", "мая", "июня",
@@ -1306,7 +1181,7 @@ function parseGameDate(rawDate) {
         ];
 
         dayOfWeek = DAYS_OF_WEEK[date.getDay()];
-        dateStr = `${day} ${months[monthIdx]}`; // На выходе: "18 июня"
+        dateStr = `${day} ${months[monthIdx]}`;
     }
 
     return { dayOfWeek, dateStr };
@@ -1314,10 +1189,9 @@ function parseGameDate(rawDate) {
 
 // Автоматическое добавление игры в To-Do при вызове /poll
 async function addGameToTodo(gameId, gameTitle, rawDate, env) {
-    let todoData = await env.QUIZ_DB.get("todo_list", "json");
+    let todoData = await env.QUIZ_DB.get("todo_list", { type: "json" });
     if (!todoData) {
-        const tzOffset = 7 * 60 * 60 * 1000;
-        const localTime = new Date(Date.now() + tzOffset);
+        const localTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
         const currentMonthKey = `${localTime.getFullYear()}-${String(localTime.getMonth() + 1).padStart(2, '0')}`;
         todoData = { pinned_message_id: null, current_month: currentMonthKey, games: [] };
     }
