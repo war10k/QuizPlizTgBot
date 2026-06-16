@@ -15,71 +15,63 @@ function getScheduleApi(env) {
     return `https://api.quizplease.ru/api/games/schedule/${env.CITY_ID}?order=date&meta[]=places_ids&meta[]=dates&statuses[]=0&statuses[]=1&statuses[]=2&statuses[]=3&statuses[]=5`;
 }
 
-function tgUrl(env, method) {
-    return `https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`;
-}
-
 const DAYS_OF_WEEK = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
 
+
 export default {
-    
+
     async scheduled(controller, env, ctx) {
-        ctx.waitUntil(runDailyCronTasks(env, controller));
+        ctx.waitUntil(runDailyCronTasks(env));
     },
 
     async fetch(request, env, ctx) {
-
-        // Cloudflare принимает только POST запросы от Telegram
-        if (request.method === "POST") {
-            try {
-                const payload = await request.json();
-                
-                // 1. Ловим клики в опросах
-                if (payload.poll_answer) {
-                    ctx.waitUntil(handlePollAnswer(payload.poll_answer, env));
-                }
-
-                if (payload.callback_query) {
-                    ctx.waitUntil(handleCallbackQuery(payload.callback_query, env));
-                }
-
-                // Проверяем, есть ли текстовое сообщение
-                if (payload.message && payload.message.text) {
-                    const chatId = payload.message.chat.id;
-                    const text = payload.message.text;
-                    
-                     console.log(`Получен текст: "${text}" от чата: ${chatId}`);
-
-                    if (text.startsWith("/stats")) ctx.waitUntil(sendStats(chatId, env));
-                    if (text.startsWith("/nextgame")) ctx.waitUntil(sendNextGamesList(chatId, env));
-                    if (text.startsWith("/remind")) ctx.waitUntil(forceTestReminder(chatId, env));
-                    if (text.startsWith("/halloffame") || text.startsWith("/hof")) {
-                        ctx.waitUntil(sendHallOfFame(chatId, env));
-                    }
-
-                    if (text.startsWith("/testresults")) {
-                        ctx.waitUntil(checkLiveResults(chatId, env));
-                    }
-
-                    if (text.startsWith("/poll")) {
-                        ctx.waitUntil(sendPollMenu(chatId, env));
-                    }
-
-                    if (text.startsWith("/ping")) ctx.waitUntil(pingTeam(chatId, env));
-
-                    if (text.startsWith("/quiz")) ctx.waitUntil(sendTriviaQuiz(chatId, env));
-                }
-            } catch (e) {
-                console.error("Ошибка обработки:", e);
+        if (request.method !== "POST") return new Response("OK");
+        try {
+            const payload = await request.json();
+            
+            if (payload.poll_answer) {
+                ctx.waitUntil(handlePollAnswer(payload.poll_answer, env));
+            } else if (payload.callback_query) {
+                ctx.waitUntil(handleCallbackQuery(payload.callback_query, env));
+            } else if (payload.message && payload.message.text) {
+                ctx.waitUntil(handleCommands(payload.message, env));
             }
+        } catch (e) {
+            console.error("Критическая ошибка fetch-роутера:", e);
         }
-        
-        // Всегда возвращаем Telegram статус 200 OK
-        return new Response("OK", { status: 200 });
+        return new Response("OK");
     }
 };
 
-async function runDailyCronTasks(env, event) {
+// Хелпер сборки динамических URL для Telegram API, который вы просили вернуть
+const tgUrl = (env, method) => `https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`;
+
+// Главный обработчик текстовых команд
+async function handleCommands(msg, env) {
+    const text = msg.text.trim();
+    const chatId = msg.chat.id;
+
+    if (text.startsWith("/stats")) {
+        await getTeamStats(chatId, env);
+    } else if (text.startsWith("/nextgame")) {
+        await getNextGames(chatId, env);
+    } else if (text.startsWith("/poll")) {
+        await showPollMenu(chatId, env);
+    } else if (text.startsWith("/ping")) {
+        await showPingMenu(chatId, env);
+    } else if (text.startsWith("/hof") || text.startsWith("/halloffame")) {
+        await getHallOfFame(chatId, env);
+    }
+
+    if (text.startsWith("/testresults")) {
+        checkLiveResults(chatId, env));
+    }
+    if (text.startsWith("/quiz")) {
+        sendTriviaQuiz(chatId, env));
+    }
+}
+
+async function runDailyCronTasks(env) {
     
     const now = new Date();
     const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
@@ -599,10 +591,6 @@ async function sendTelegramMessage(chatId, text, env) {
             })
         });
     } catch (err) { console.error("Ошибка отправки в Telegram:", err); }
-}
-
-async function forceTestReminder(targetChatId, env) {
-    await checkAndSendReminders(targetChatId, env);
 }
 
 // --- ФУНКЦИЯ ТРЕКИНГА И ДОСТИЖЕНИЙ ---
@@ -1172,19 +1160,6 @@ async function sendTriviaQuiz(targetChatId, env) {
 }
 
 // --- МОДУЛЬ СПИСКА ЗАДАЧ (TO-DO) ---
-
-// Вспомогательная функция для определения дня недели по строке даты (ДД.ММ.ГГГГ)
-function getRussianDayOfWeek(dateStr) {
-    if (!dateStr) return "Воскресенье"; // Заглушка на случай ошибки
-    // Если дата приходит в формате "18.06.2026"
-    const parts = dateStr.split('.');
-    if (parts.length === 3) {
-        const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        const days = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
-        return days[date.getDay()];
-    }
-    return "День игры"; // Если формат строки нестандартный
-}
 
 // Формирование текста и тихое обновление (или создание) закрепленного сообщения
 async function updateTodoMessage(env) {
