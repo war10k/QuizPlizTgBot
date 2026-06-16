@@ -382,8 +382,7 @@ async function handleCallbackQuery(callbackQuery, env) {
                     date: gameDate,
                     time: gameTime,
                     place: placeTitle,
-                    voters: {},
-                    resultsChecked: false // Флаг, чтобы бот знал, что результаты этой игры еще не выводились
+                    voters: {}
                 };
                 await env.QUIZ_DB.put(`poll:${pollId}`, JSON.stringify(gameObject));
                 await env.QUIZ_DB.put(`date:${gameDate}`, pollId);
@@ -951,7 +950,7 @@ async function checkLiveResults(targetChatId, env) {
                     let todoData = await env.QUIZ_DB.get("todo_list", "json");
                     if (todoData && todoData.games.length > 0) {
                         // Ищем нашу игру в общем списке задач
-                        const todoGameIndex = todoData.games.findIndex(g => g.id === checkedGameId);
+                        const todoGameIndex = todoData.games.findIndex(g => g.id === gameId);
                         
                         if (todoGameIndex !== -1 && todoData.games[todoGameIndex].status !== "done") {
                             // Переводим статус в "Выполнено"
@@ -960,7 +959,7 @@ async function checkLiveResults(targetChatId, env) {
                             // Сохраняем изменения и тихо обновляем закрепленный список
                             await env.QUIZ_DB.put("todo_list", JSON.stringify(todoData));
                             await updateTodoMessage(env);
-                            console.log(`Игра #${checkedGameId} автоматически отмечена как выполненная в To-Do.`);
+                            console.log(`Игра #${gameId} автоматически отмечена как выполненная в To-Do.`);
                         }
                     }
                 }
