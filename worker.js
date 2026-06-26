@@ -55,6 +55,8 @@ async function handleCommands(msg, env) {
         await sendStats(chatId, env);
     } else if (text.startsWith("/nextgame")) {
         await sendNextGamesList(chatId, env);
+    } else if (text.startsWith("/pollweek")) {
+        await sendNextWeekPoll(chatId, env);
     } else if (text.startsWith("/poll")) {
         await showPollMenu(chatId, env);
     } else if (text.startsWith("/ping")) {
@@ -243,6 +245,118 @@ async function showPollMenu(targetChatId, env) {
     } catch (error) {
         console.error("Ошибка меню опросов:", error);
         await sendTelegramMessage(targetChatId, "❌ Произошла ошибка при загрузке меню игр.", env);
+    }
+}
+
+// --- ФУНКЦИЯ СОЗДАНИЯ ОПРОСА НА СЛЕДУЮЩУЮ НЕДЕЛЮ ---
+async function sendNextWeekPoll(targetChatId, env) {
+    const headers = { "User-Agent": "Mozilla/5.0" };
+    try {
+        const response = await fetch(getScheduleApi(env), { headers });
+        if (response.status !== 200) {
+            await sendTelegramMessage(targetChatId, `❌ Ошибка API Квиз, плиз! (${response.status})`, env);
+            return;
+        }
+
+        const json_data = await response.json();
+        const gamesList = json_data.data?.data || [];
+
+        if (gamesList.length === 0) {
+            await sendTelegramMessage(targetChatId, "📅 <b>Афиша игр:</b> На данный момент доступных игр нет.", env);
+            return;
+        }
+
+        // Определяем границы следующей недели
+        const now = new Date();
+        const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
+        const dayOfWeek = localTime.getDay(); // 0 - воскресенье, 1 - понедельник
+        const daysUntilNextMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+        
+        const nextMonday = new Date(localTime);
+        nextMonday.setDate(localTime.getDate() + daysUntilNextMonday);
+        nextMonday.setHours(0, 0, 0, 0);
+
+        const nextSunday = new Date(nextMonday);
+        nextSunday.setDate(nextMonday.getDate() + 6);
+        nextSunday.setHours(23, 59, 59, 999);
+
+        let nextWeekGames = [];
+
+        for (const game of gamesList) {
+            const rawDate = game.date || "";
+            if (!rawDate) continue;
+
+            const dateParts = rawDate.split(" ");
+            const gameDateStr = dateParts[0];
+            const parts = gameDateStr.split(".");
+            if (parts.length !== 3) continue;
+
+            const gameDateObj = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+            
+            if (gameDateObj >= nextMonday && gameDateObj <= nextSunday) {
+                nextWeekGames.push(game);
+            }
+        }
+
+        if (nextWeekGames.length === 0) {
+            await sendTelegramMessage(targetChatId, "📅 На следующую неделю игр в расписании пока нет.", env);
+            return;
+        }
+
+        let options = [];
+        const shortDays = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+
+        for (const game of nextWeekGames) {
+            const title = game.title || "Без названия";
+            const rawDate = game.date || ""; 
+            const dateParts = rawDate.split(" ");
+            const gameDateStr = dateParts[0]; // DD.MM.YYYY
+            const gameTime = dateParts[1] || ""; // HH:MM
+            const parts = gameDateStr.split(".");
+            const gameDateObj = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+            const shortDay = shortDays[gameDateObj.getDay()];
+            
+            // Формат: "12.05 (Пн) 19:00 — Название"
+            let optionText = `${gameDateStr.substring(0, 5)} (${shortDay}) ${gameTime} — ${title}`;
+            if (optionText.length > 100) {
+                optionText = optionText.substring(0, 97) + "...";
+            }
+
+            // Telegram требует уникальные варианты ответов
+            while (options.includes(optionText)) {
+                optionText += " ";
+                if (optionText.length > 100) {
+                    optionText = optionText.substring(0, 99) + " ";
+                }
+            }
+
+            options.push(optionText);
+            
+            if (options.length >= 9) {
+                break; // Оставляем место для варианта "Пропускаю"
+            }
+        }
+
+        options.push("Пропускаю неделю 😢");
+
+        const pollQuestion = `На какие игры идем на следующей неделе?`;
+
+        await fetch(tgUrl(env, "sendPoll"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                chat_id: targetChatId,
+                question: pollQuestion,
+                options: JSON.stringify(options),
+                is_anonymous: false,
+                allows_multiple_answers: true,
+                type: "regular"
+            })
+        });
+
+    } catch (error) {
+        console.error("Ошибка команды /pollweek:", error);
+        await sendTelegramMessage(targetChatId, "❌ Произошла ошибка при создании опроса.", env);
     }
 }
 
