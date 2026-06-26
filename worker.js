@@ -672,6 +672,10 @@ async function trackRatingChanges(targetChatId, env) {
     if (!env.QUIZ_DB) return;
     const headers = { "User-Agent": "Mozilla/5.0" };
 
+    let changesFound = false;
+    let celebrationText = `🎉 <b>ЗАЛ СЛАВЫ: Новое достижение!</b> 🎉\n\n`;
+    celebrationText += `🍩 Пончики, обновились таблицы результатов на сайте Квиз, плиз!:\n\n`;
+
     for (const [label, baseUrl] of Object.entries(getApiEndpoints(env))) {
         try {
             const fullUrl = `${baseUrl}&title=${encodeURIComponent(env.TEAM_NAME)}`;
@@ -686,6 +690,7 @@ async function trackRatingChanges(targetChatId, env) {
                     const currentPoints = team.points !== undefined ? team.points : 0;
                     const currentGames = team.games !== undefined ? team.games : 0;
                     const currentRank = team.rank?.title || "Без ранга";
+                    const currentPlace = team.place !== undefined ? team.place : "Неизвестно";
 
                     const dbKey = `stats:${label}`;
                     const cachedData = await env.QUIZ_DB.get(dbKey);
@@ -697,20 +702,18 @@ async function trackRatingChanges(targetChatId, env) {
 
                         // Если количество сыгранных игр увеличилось — вы играли!
                         if (currentGames > oldGames) {
+                            changesFound = true;
                             const pointsDiff = (currentPoints - oldPoints).toFixed(1);
                             const gamesDiff = currentGames - oldGames;
 
-                            let celebrationText = `🎉 <b>ЗАЛ СЛАВЫ: Новое достижение!</b> 🎉\n\n`;
-                            celebrationText += `🍩 Пончики, обновились таблицы результатов на сайте Квиз, плиз!:\n\n`;
                             celebrationText += `<b>Категория:</b> ${label}\n`;
                             celebrationText += `📈 <b>Прирост очков:</b> <code>+${pointsDiff}</code> баллов!\n`;
-                            celebrationText += `🎮 <b>Сыграно за раз:</b> <code>+${gamesDiff}</code> игр(ы)\n\n`;
-                            celebrationText += `🌟 <b>Текущие общие итоги в этой лиге:</b>\n`;
+                            celebrationText += `🎮 <b>Сыграно за раз:</b> <code>+${gamesDiff}</code> игр(ы)\n`;
+                            celebrationText += `🌟 <b>Текущие общие итоги:</b>\n`;
                             celebrationText += `├ ✨ Сумма очков: <code>${currentPoints}</code>\n`;
                             celebrationText += `├ 🎮 Всего игр: <code>${currentGames}</code>\n`;
-                            celebrationText += `└ 🎖 Наш текущий ранг: <b>${currentRank}</b>\n\n`;
-                            
-                            await sendTelegramMessage(targetChatId, celebrationText, env);
+                            celebrationText += `├ 🎖 Наш текущий ранг: <b>${currentRank}</b>\n`;
+                            celebrationText += `└ 🏅 Текущее место в рейтинге: <b>${currentPlace}</b>\n\n`;
                         }
                     }
 
@@ -718,6 +721,7 @@ async function trackRatingChanges(targetChatId, env) {
                         points: currentPoints,
                         games: currentGames,
                         rank: currentRank,
+                        place: currentPlace,
                         updatedAt: new Date().toISOString()
                     }));
                 }
@@ -725,6 +729,10 @@ async function trackRatingChanges(targetChatId, env) {
         } catch (error) {
             console.error(`Ошибка трекера в категории ${label}:`, error);
         }
+    }
+
+    if (changesFound) {
+        await sendTelegramMessage(targetChatId, celebrationText, env);
     }
 }
 
@@ -1420,8 +1428,9 @@ async function updateTodoMessage(env) {
 
             // Экранируем символы < и > в названии игры для безопасности HTML
             const cleanTitle = game.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const gameUrl = `https://${env.CITY_SLUG}.quizplease.ru/game/${game.id}`;
 
-            messageText += `${statusEmoji} ${index + 1}. <b>${game.day_of_week}</b>, ${game.date_str}: #${game.id} [${cleanTitle}] — <i>${statusText}</i>\n`;
+            messageText += `${statusEmoji} ${index + 1}. <b>${game.day_of_week}</b>, ${game.date_str}: <a href="${gameUrl}">${cleanTitle}</a> — <i>${statusText}</i>\n`;
         });
     }
 
