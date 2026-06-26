@@ -1044,53 +1044,67 @@ async function checkLiveResultsTest(targetChatId, env) {
 
 // --- ФУНКЦИЯ ВЫВОДА МЕНЮ ВЫБОРА ОПРОСА ДЛЯ ПИНГА ---
 async function pingTeam(targetChatId, env) {
-    if (!env.QUIZ_DB) return;
 
-    try {
-        const cachedTeam = await env.QUIZ_DB.get("global_team_members");
-        if (!cachedTeam) {
-            await sendTelegramMessage(targetChatId, "ℹ️ <b>Пинг пока невозможен:</b> В базе данных еще нет сохраненных игроков.", env);
-            return;
-        }
-
-        // Вытаскиваем из базы список всех когда-либо созданных опросов
-        const list = await env.QUIZ_DB.list({ prefix: "poll:" });
-        if (!list.keys || list.keys.length === 0) {
-            await sendTelegramMessage(targetChatId, "⚠️ <b>Пинг отменен:</b> В чате пока нет запущенных опросов на игры.", env);
-            return;
-        }
-
-        let inlineKeyboard = [];
-
-        // Перебираем все опросы из базы
-        for (const keyObj of list.keys) {
-            const pollData = await env.QUIZ_DB.get(keyObj.name);
-            if (!pollData) continue;
-
-            const game = JSON.parse(pollData);
-            const pollId = keyObj.name.replace("poll:", "");
-
-            inlineKeyboard.push([{
-                text: `${game.date} — ${game.title}`,
-                callback_data: `png:${pollId}`
-            }]);
-        }
-
-        // Отправляем меню выбора в чат
-        await fetch(tgUrl(env, "sendMessage"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                chat_id: targetChatId,
-                text: "🔔 <b>Выбор опроса для пинга прогульщиков</b>\n\nВыберите нужную игру, чтобы тегнуть молчунов: 👇",
-                parse_mode: "HTML",
-                reply_markup: { inline_keyboard: inlineKeyboard }
-            })
-        });
-
-    } catch (error) {
-        console.error("Ошибка вывода меню пинга:", error);
+    // 1. Получаем актуальный To-Do список из базы
+    const todoDataRaw = await env.QUIZ_DB.get("todo_list");
+    if (!todoDataRaw) {
+        return await sendTelegramMessage(env, targetChatId, "📭 Список игр пуст. Некого пинговать!");
     }
+
+    const todoData = JSON.parse(todoDataRaw);
+    const games = todoData.games || [];
+
+    // 2. Фильтруем только АКТИВНЫЕ игры (у которых статус не "done")
+    // Дополнительно можно проверять, что для игры вообще существует активный опрос
+    const activeGames = games.filter(game => game.status !== "done");
+
+    if (activeGames.length === 0) {
+        return await sendTelegramMessage(env, targetChatId, "📅 Нет активных игр для напоминания.");
+    }
+
+    // 3. Строим клавиатуру только для живых игр
+    const inlineKeyboard = [];
+
+    for (const game of activeGames) {
+        // Ищем соответствующий poll_id для этой игры в KV, если он хранится отдельно,
+        // либо используем внутренний ID игры. 
+        // Предположим, у тебя связь идет через префикс poll: или прямо по game.id:
+        const pollKey = `poll:${game.id}`;
+        const pollId = await env.QUIZ_DB.get(pollKey);
+
+        // Если опрос для игры не найден или удален, можно пропустить или слать по game.id
+        if (!pollId) continue; 
+
+        inlineKeyboard.push([{
+            text: `🔔 ${game.date} — ${game.title || "Квиз"}`,
+            // Передаем pollId (главное, чтобы строка png:pollId не превысила 64 байта!)
+            callback_data: `png:${pollId}` 
+        }]);
+    }
+
+    if (inlineKeyboard.length === 0) {
+        return await sendTelegramMessage(env, targetChatId, "🤷‍♂️ Активные игры есть, но опросы по ним не запущены.");
+    }
+
+    // 4. ДОБАВЛЯЕМ КНОПКУ «ОТМЕНА»
+    // Используем понятный префикс, например, 'action:cancel' или просто 'cancel'
+    inlineKeyboard.push([{
+        text: "❌ Отмена",
+        callback_data: "cmd:cancel_menu"
+    }]);
+
+    const text = "🎯 *Выбери игру, чтобы тегнуть молчунов:*";
+
+    await fetch(tgUrl(env, "sendMessage"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            chat_id: targetChatId,
+            text: text,
+            parse_mode: "Markdown",
+            reply_markup: { inline_keyboard: inlineKeyboard }
+        })
+    });
 }
 
 // --- ФУНКЦИЯ ВЫПОЛНЕНИЯ ТОЧЕЧНОГО ПИНГА ПО ВЫБРАННОЙ ИГРЕ ---
