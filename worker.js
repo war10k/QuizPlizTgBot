@@ -690,7 +690,7 @@ async function trackRatingChanges(targetChatId, env) {
                     const currentPoints = team.points !== undefined ? team.points : 0;
                     const currentGames = team.games !== undefined ? team.games : 0;
                     const currentRank = team.rank?.title || "Без ранга";
-                    const currentPlace = team.place !== undefined ? team.place : "Неизвестно";
+                    const currentPlace = team.index !== undefined ? team.index : "Неизвестно";
 
                     const dbKey = `stats:${label}`;
                     const cachedData = await env.QUIZ_DB.get(dbKey);
