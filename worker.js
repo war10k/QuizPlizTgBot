@@ -707,13 +707,21 @@ async function trackRatingChanges(targetChatId, env) {
                             const gamesDiff = currentGames - oldGames;
 
                             celebrationText += `<b>Категория:</b> ${label}\n`;
-                            celebrationText += `📈 <b>Прирост очков:</b> <code>+${pointsDiff}</code> баллов!\n`;
-                            celebrationText += `🎮 <b>Сыграно за раз:</b> <code>+${gamesDiff}</code> игр(ы)\n`;
-                            celebrationText += `🌟 <b>Текущие общие итоги:</b>\n`;
-                            celebrationText += `├ ✨ Сумма очков: <code>${currentPoints}</code>\n`;
-                            celebrationText += `├ 🎮 Всего игр: <code>${currentGames}</code>\n`;
-                            celebrationText += `├ 🎖 Наш текущий ранг: <b>${currentRank}</b>\n`;
-                            celebrationText += `└ 🏅 Текущее место в рейтинге: <b>${currentPlace}</b>\n\n`;
+                            
+                            if (label.includes("Сезонный")) {
+                                celebrationText += `📈 <b>Прирост очков:</b> <code>+${pointsDiff}</code> баллов!\n`;
+                                celebrationText += `🎮 <b>Сыграно за раз:</b> <code>+${gamesDiff}</code> игр(ы)\n`;
+                                celebrationText += `🌟 <b>Текущие общие итоги:</b>\n`;
+                                celebrationText += `├ ✨ Сумма очков: <code>${currentPoints}</code>\n`;
+                                celebrationText += `├ 🎮 Всего игр: <code>${currentGames}</code>\n`;
+                                celebrationText += `└ 🏅 Текущее место в рейтинге: <b>${currentPlace}</b>\n\n`;
+                            } else {
+                                celebrationText += `🌟 <b>Текущие общие итоги:</b>\n`;
+                                celebrationText += `├ ✨ Сумма очков: <code>${currentPoints}</code>\n`;
+                                celebrationText += `├ 🎮 Всего игр: <code>${currentGames}</code>\n`;
+                                celebrationText += `├ 🎖 Наш текущий ранг: <b>${currentRank}</b>\n`;
+                                celebrationText += `└ 🏅 Текущее место в рейтинге: <b>${currentPlace}</b>\n\n`;
+                            }
                         }
                     }
 
