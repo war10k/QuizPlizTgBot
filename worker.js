@@ -6,8 +6,8 @@ function getApiEndpoints(env) {
     return {
         "🏆 Сезонный рейтинг (Кино и музыка)": `${URLS}&rating=2&bySeason=true`,
         "🌍 Общий рейтинг (Кино и музыка)": `${URLS}&rating=2&bySeason=false`,
-        "🌍 Общий рейтинг (Классика)": `${URLS}&rating=1&bySeason=false`,
-        "🏆 Сезонный рейтинг (Классика)": `${URLS}&rating=1&bySeason=true`
+        "🏆 Сезонный рейтинг (Классика)": `${URLS}&rating=1&bySeason=true`,
+        "🌍 Общий рейтинг (Классика)": `${URLS}&rating=1&bySeason=false`
     };
 }
 
