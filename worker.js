@@ -1381,119 +1381,149 @@ async function sendTriviaQuiz(targetChatId, env) {
 async function updateTodoMessage(env) {
     const now = new Date();
     const localTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Krasnoyarsk" }));
-    const year = localTime.getFullYear();
-    const month = String(localTime.getMonth() + 1).padStart(2, '0');
-    const currentMonthKey = `${year}-${month}`;
+    const currentYear = localTime.getFullYear();
+    const currentMonthNum = String(localTime.getMonth() + 1).padStart(2, '0');
+    const currentMonthKey = `${currentYear}-${currentMonthNum}`;
 
     const monthsRu = [
         "ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ",
         "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ"
     ];
-    const monthName = monthsRu[localTime.getMonth()];
 
     let todoData = await env.QUIZ_DB.get("todo_list", { type: "json" });
     if (!todoData) {
-        todoData = { pinned_message_id: null, current_month: currentMonthKey, games: [] };
+        todoData = { pinned_messages: {}, current_month: currentMonthKey, games: [] };
     }
 
-    if (todoData.current_month !== currentMonthKey) {
-        todoData.pinned_message_id = null;
-        todoData.current_month = currentMonthKey;
-        todoData.games = todoData.games.filter(g => {
-            const gParts = g.raw_date.split('.');
-            if (gParts.length === 3) {
-                const formattedMonth = String(gParts[1]).padStart(2, '0');
-                return `${gParts[2]}-${formattedMonth}` >= currentMonthKey;
-            }
-            return true;
-        });
+    // Миграция старого формата (если есть pinned_message_id)
+    if (todoData.pinned_message_id !== undefined) {
+        todoData.pinned_messages = {};
+        if (todoData.pinned_message_id && todoData.current_month) {
+            todoData.pinned_messages[todoData.current_month] = todoData.pinned_message_id;
+        }
+        delete todoData.pinned_message_id;
     }
+    if (!todoData.pinned_messages) todoData.pinned_messages = {};
 
-    // Собираем текст в безопасном HTML формате
-    let messageText = `📌 <b>СПИСОК ЗАДАЧ НА ${monthName} ${year}</b>\n\n`;
-    
-    if (todoData.games.length === 0) {
-        messageText += "⏳ Задач пока нет. Запустите /poll для добавления игры!";
-    } else {
-        todoData.games.sort((a, b) => {
+    // Очистка старых игр (меньше текущего календарного месяца)
+    todoData.games = todoData.games.filter(g => {
+        const gParts = g.raw_date.split('.');
+        if (gParts.length === 3) {
+            const formattedMonth = String(gParts[1]).padStart(2, '0');
+            return `${gParts[2]}-${formattedMonth}` >= currentMonthKey;
+        }
+        return true;
+    });
+
+    // Группируем игры по месяцам
+    const gamesByMonth = {};
+    gamesByMonth[currentMonthKey] = []; // Гарантируем, что текущий месяц всегда есть
+
+    todoData.games.forEach(game => {
+        const gParts = game.raw_date.split('.');
+        if (gParts.length === 3) {
+            const monthKey = `${gParts[2]}-${String(gParts[1]).padStart(2, '0')}`;
+            if (!gamesByMonth[monthKey]) gamesByMonth[monthKey] = [];
+            gamesByMonth[monthKey].push(game);
+        } else {
+            gamesByMonth[currentMonthKey].push(game); // Fallback
+        }
+    });
+
+    const chatId = env.CHAT_ID;
+
+    for (const [monthKey, monthGames] of Object.entries(gamesByMonth)) {
+        // Сортируем игры внутри месяца
+        monthGames.sort((a, b) => {
             const aArr = a.raw_date.split('.').reverse().join('');
             const bArr = b.raw_date.split('.').reverse().join('');
             return aArr.localeCompare(bArr);
         });
 
-        todoData.games.forEach((game, index) => {
-            let statusEmoji = "⏳";
-            let statusText = "Опрос активен";
-            
-            if (game.status === "done") {
-                statusEmoji = "✅";
-                statusText = "Сыграно!";
-            } else if (game.status === "canceled") {
-                statusEmoji = "❌";
-                statusText = "Отменено";
-            }
+        const [yearStr, monthStr] = monthKey.split('-');
+        const monthName = monthsRu[parseInt(monthStr, 10) - 1];
 
-            // Экранируем символы < и > в названии игры для безопасности HTML
-            const cleanTitle = game.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            const gameUrl = `https://${env.CITY_SLUG}.quizplease.ru/game/${game.id}`;
+        let messageText = `📌 <b>СПИСОК ЗАДАЧ НА ${monthName} ${yearStr}</b>\n\n`;
 
-            messageText += `${statusEmoji} ${index + 1}. <b>${game.day_of_week}</b>, ${game.date_str}: <a href="${gameUrl}">${cleanTitle}</a> — <i>${statusText}</i>\n`;
-        });
-    }
-
-    messageText += `\n<i>🔄 Обновлено автоматически в ${String(localTime.getHours()).padStart(2, '0')}:${String(localTime.getMinutes()).padStart(2, '0')}</i>`;
-
-    const chatId = env.CHAT_ID;
-    
-    if (todoData.pinned_message_id) {
-        try {
-            await fetch(tgUrl(env, "editMessageText"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    chat_id: chatId,
-                    message_id: todoData.pinned_message_id,
-                    text: messageText,
-                    parse_mode: "HTML"
-                })
-            });
-        } catch (e) {
-            console.error("Ошибка обновления закрепленного сообщения:", e);
-            todoData.pinned_message_id = null; 
-        }
-    }
-
-    if (!todoData.pinned_message_id) {
-        try {
-            const sendRes = await fetch(tgUrl(env, "sendMessage"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    chat_id: chatId,
-                    text: messageText,
-                    parse_mode: "HTML"
-                })
-            });
-            const sendData = await sendRes.json();
-            
-            if (sendData.ok) {
-                todoData.pinned_message_id = sendData.result.message_id;
+        if (monthGames.length === 0) {
+            messageText += "⏳ Задач пока нет. Запустите /poll для добавления игры!";
+        } else {
+            monthGames.forEach((game, index) => {
+                let statusEmoji = "⏳";
+                let statusText = "Опрос активен";
                 
-                await fetch(tgUrl(env, "pinChatMessage"), {
+                if (game.status === "done") {
+                    statusEmoji = "✅";
+                    statusText = "Сыграно!";
+                } else if (game.status === "canceled") {
+                    statusEmoji = "❌";
+                    statusText = "Отменено";
+                }
+
+                const cleanTitle = game.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                const gameUrl = `https://${env.CITY_SLUG}.quizplease.ru/game/${game.id}`;
+
+                messageText += `${statusEmoji} ${index + 1}. <b>${game.day_of_week}</b>, ${game.date_str}: <a href="${gameUrl}">${cleanTitle}</a> — <i>${statusText}</i>\n`;
+            });
+        }
+
+        messageText += `\n\n<i>🔄 Обновлено автоматически в ${String(localTime.getHours()).padStart(2, '0')}:${String(localTime.getMinutes()).padStart(2, '0')}</i>`;
+
+        let msgId = todoData.pinned_messages[monthKey];
+
+        if (msgId) {
+            try {
+                await fetch(tgUrl(env, "editMessageText"), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         chat_id: chatId,
-                        message_id: todoData.pinned_message_id,
-                        disable_notification: true
+                        message_id: msgId,
+                        text: messageText,
+                        parse_mode: "HTML"
                     })
                 });
+            } catch (e) {
+                console.error(`Ошибка обновления закрепленного сообщения для ${monthKey}:`, e);
+                msgId = null; 
             }
-        } catch (e) {
-            console.error("Ошибка публикации или закрепа сообщения:", e);
+        }
+
+        if (!msgId) {
+            try {
+                const sendRes = await fetch(tgUrl(env, "sendMessage"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: messageText,
+                        parse_mode: "HTML"
+                    })
+                });
+                const sendData = await sendRes.json();
+                
+                if (sendData.ok) {
+                    msgId = sendData.result.message_id;
+                    todoData.pinned_messages[monthKey] = msgId;
+                    
+                    await fetch(tgUrl(env, "pinChatMessage"), {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            chat_id: chatId,
+                            message_id: msgId,
+                            disable_notification: true
+                        })
+                    });
+                }
+            } catch (e) {
+                console.error(`Ошибка публикации или закрепа сообщения для ${monthKey}:`, e);
+            }
         }
     }
 
+    // Обновляем current_month, чтобы логика очистки работала правильно
+    todoData.current_month = currentMonthKey;
     await env.QUIZ_DB.put("todo_list", JSON.stringify(todoData));
 }
 
